@@ -5,10 +5,16 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useMapLevels } from "@/hooks/use-map-levels";
 import { useCreateMapLevel } from "@/hooks/use-create-map-level";
 import { useRenameMapLevel } from "@/hooks/use-rename-map-level";
+import { useTokens } from "@/hooks/use-tokens";
+import { usePlaceToken } from "@/hooks/use-place-token";
+import { useMoveToken } from "@/hooks/use-move-token";
+import { useRemoveToken } from "@/hooks/use-remove-token";
 import { MapHierarchyTree } from "@/components/features/maps/map-hierarchy-tree";
 import { MapBreadcrumb } from "@/components/features/maps/map-breadcrumb";
 import { CreateMapLevelDialog } from "@/components/features/maps/create-map-level-dialog";
 import { ImportMapBackgroundButton } from "@/components/features/maps/import-map-background-button";
+import { MapCanvas } from "@/components/canvas/map-canvas";
+import { TokenPalette } from "@/components/features/maps/token-palette";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { AlertCircle, Plus, Map, Upload } from "lucide-react";
@@ -29,6 +35,14 @@ export default function GmPrepMapsPage({
   );
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
+  const { tokens, isLoading: tokensLoading, isError: tokensError } = useTokens(
+    campaignId,
+    selectedMapLevelId
+  );
+  const placeToken = usePlaceToken(campaignId);
+  const moveToken = useMoveToken(campaignId);
+  const removeToken = useRemoveToken(campaignId);
+
   const handleCreateLevel = (data: { name: string; parentId?: string }) => {
     createMapLevel.mutate(
       {
@@ -47,6 +61,27 @@ export default function GmPrepMapsPage({
       mapLevelId,
       newName,
     });
+  };
+
+  const handleTokenPlace = (
+    tokenId: string,
+    mapLevelId: string,
+    x: number,
+    y: number,
+    tokenType: string,
+    label: string
+  ) => {
+    placeToken.mutate({ tokenId, mapLevelId, x, y, tokenType, label });
+  };
+
+  const handleTokenMove = (tokenId: string, x: number, y: number) => {
+    if (!selectedMapLevelId) return;
+    moveToken.mutate({ tokenId, mapLevelId: selectedMapLevelId, x, y });
+  };
+
+  const handleTokenRemove = (tokenId: string) => {
+    if (!selectedMapLevelId) return;
+    removeToken.mutate({ tokenId, mapLevelId: selectedMapLevelId });
   };
 
   const selectedLevel = mapLevels.find((l) => l.id === selectedMapLevelId);
@@ -128,22 +163,34 @@ export default function GmPrepMapsPage({
                 />
               </div>
 
-              {/* Background display */}
-              <div className="flex-1 flex items-center justify-center overflow-hidden relative">
-                {selectedLevel.backgroundImageUrl ? (
-                  <img
-                    src={selectedLevel.backgroundImageUrl}
-                    alt={`${selectedLevel.name} background`}
-                    className="max-w-full max-h-full object-contain"
-                  />
-                ) : (
-                  <div className="text-center text-muted-foreground">
-                    <Upload className="h-16 w-16 mx-auto mb-4 opacity-30" />
-                    <p className="text-lg font-medium">No background image</p>
-                    <p className="text-sm mt-1">
-                      Click &quot;Import Background&quot; to add a map image.
-                    </p>
+              {/* Canvas with tokens */}
+              <div className="flex-1 overflow-hidden relative">
+                {tokensError ? (
+                  <div className="flex flex-col items-center justify-center h-full">
+                    <AlertCircle className="h-8 w-8 text-destructive mb-2" />
+                    <p className="text-sm text-destructive">Failed to load tokens.</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      onClick={() =>
+                        queryClient.invalidateQueries({
+                          queryKey: ["tokens", campaignId, selectedMapLevelId],
+                        })
+                      }
+                    >
+                      Retry
+                    </Button>
                   </div>
+                ) : (
+                  <MapCanvas
+                    mapLevel={selectedLevel}
+                    tokens={tokens}
+                    interactive={true}
+                    onTokenPlace={handleTokenPlace}
+                    onTokenMove={handleTokenMove}
+                    onTokenRemove={handleTokenRemove}
+                  />
                 )}
               </div>
             </>
@@ -159,6 +206,13 @@ export default function GmPrepMapsPage({
             </div>
           )}
         </div>
+
+        {/* Right sidebar - Token Palette */}
+        {selectedLevel && (
+          <div className="w-56 border-l overflow-y-auto">
+            <TokenPalette />
+          </div>
+        )}
       </div>
 
       {/* Create Dialog */}

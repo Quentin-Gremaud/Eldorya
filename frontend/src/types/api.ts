@@ -240,6 +240,42 @@ export interface SetMapBackgroundPayload {
   commandId: string;
 }
 
+// Token types
+
+export type TokenType = "player" | "npc" | "monster";
+
+export interface Token {
+  id: string;
+  campaignId: string;
+  mapLevelId: string;
+  x: number;
+  y: number;
+  tokenType: TokenType;
+  label: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlaceTokenPayload {
+  tokenId: string;
+  mapLevelId: string;
+  x: number;
+  y: number;
+  tokenType: TokenType;
+  label: string;
+  commandId: string;
+}
+
+export interface MoveTokenPayload {
+  x: number;
+  y: number;
+  commandId: string;
+}
+
+export interface RemoveTokenPayload {
+  commandId: string;
+}
+
 export interface NotificationItem {
   id: string;
   type: string;

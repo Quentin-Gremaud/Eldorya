@@ -17,7 +17,7 @@ jest.mock("react", () => {
 });
 
 const mockMapLevels = [
-  { id: "l1", campaignId: "c1", name: "World", parentId: null, depth: 0, createdAt: "2026-03-08", updatedAt: "2026-03-08" },
+  { id: "l1", campaignId: "c1", name: "World", parentId: null, depth: 0, backgroundImageUrl: null, createdAt: "2026-03-08", updatedAt: "2026-03-08" },
 ];
 
 jest.mock("@clerk/nextjs", () => ({
@@ -44,6 +44,45 @@ jest.mock("@/hooks/use-rename-map-level", () => ({
     mutate: jest.fn(),
     isPending: false,
   }),
+}));
+
+jest.mock("@/hooks/use-tokens", () => ({
+  useTokens: () => ({
+    tokens: [],
+    isLoading: false,
+    isError: false,
+    error: null,
+  }),
+}));
+
+jest.mock("@/hooks/use-place-token", () => ({
+  usePlaceToken: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+  }),
+}));
+
+jest.mock("@/hooks/use-move-token", () => ({
+  useMoveToken: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+  }),
+}));
+
+jest.mock("@/hooks/use-remove-token", () => ({
+  useRemoveToken: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+  }),
+}));
+
+jest.mock("react-konva", () => ({
+  Stage: ({ children }: { children: React.ReactNode }) => <div data-testid="stage">{children}</div>,
+  Layer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Group: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Circle: () => <div />,
+  Text: () => <div />,
+  Image: () => <div />,
 }));
 
 function createWrapper() {

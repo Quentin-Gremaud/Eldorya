@@ -23,5 +23,6 @@ import { MapLevelProjection } from './projections/map-level.projection.js';
     MapLevelQueryFinder,
     MapLevelProjection,
   ],
+  exports: [MapLevelFinder],
 })
 export class MapPresentationModule {}
