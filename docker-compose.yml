@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:18
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: eldorya
+      POSTGRES_PASSWORD: eldorya
+      POSTGRES_DB: eldorya
+    volumes:
+      - pgdata:/var/lib/postgresql
+
+  kurrentdb:
+    image: kurrentplatform/kurrentdb:26.0
+    ports:
+      - "2113:2113"
+    environment:
+      KURRENTDB_INSECURE: "true"
+      KURRENTDB_ENABLE_ATOM_PUB_OVER_HTTP: "true"
+
+volumes:
+  pgdata:

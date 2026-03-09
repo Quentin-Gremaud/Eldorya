@@ -1,0 +1,217 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                      String   @id
+  clerkUserId             String   @unique @map("clerk_user_id")
+  email                   String?
+  firstName               String?  @map("first_name")
+  lastName                String?  @map("last_name")
+  ageDeclaration          Boolean  @default(false) @map("age_declaration")
+  ageDeclarationTimestamp  DateTime? @map("age_declaration_timestamp")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model EncryptionKey {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  key       String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("encryption_keys")
+}
+
+model ProjectionCheckpoint {
+  projectionName  String   @id @map("projection_name")
+  commitPosition  String   @map("commit_position")
+  preparePosition String   @map("prepare_position")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("projection_checkpoints")
+}
+
+enum CampaignStatusEnum {
+  active
+  archived
+  readonly
+
+  @@map("campaign_status")
+}
+
+model Campaign {
+  id              String             @id @default(uuid())
+  name            String
+  description     String?
+  coverImageUrl   String?            @map("cover_image_url")
+  status          CampaignStatusEnum @default(active)
+  gmUserId        String             @map("gm_user_id")
+  playerCount     Int                @default(0) @map("player_count")
+  lastSessionDate DateTime?          @map("last_session_date")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  members       CampaignMember[]
+  invitations   Invitation[]
+  announcements CampaignAnnouncement[]
+  notifications Notification[]
+
+  @@index([gmUserId, status])
+  @@map("campaigns")
+}
+
+model CampaignMember {
+  id         String   @id @default(uuid())
+  campaignId String   @map("campaign_id")
+  userId     String   @map("user_id")
+  role       String
+  joinedAt   DateTime @default(now()) @map("joined_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@unique([campaignId, userId])
+  @@map("campaign_members")
+}
+
+model Invitation {
+  id              String    @id @default(uuid())
+  tokenHash       String    @unique @map("token_hash")
+  campaignId      String    @map("campaign_id")
+  createdByUserId String    @map("created_by_user_id")
+  status          String    @default("active")
+  expiresAt       DateTime? @map("expires_at")
+  usedByUserId    String?   @map("used_by_user_id")
+  usedAt          DateTime? @map("used_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("invitations")
+}
+
+model CampaignAnnouncement {
+  id            String   @id @default(uuid())
+  campaignId    String   @map("campaign_id")
+  content       String
+  gmUserId      String   @map("gm_user_id")
+  gmDisplayName String   @map("gm_display_name")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId])
+  @@map("campaign_announcements")
+}
+
+enum CharacterStatusEnum {
+  pending
+  approved
+  rejected
+  pending_revalidation
+
+  @@map("character_status")
+}
+
+model Character {
+  id              String              @id
+  userId          String              @map("user_id")
+  campaignId      String              @map("campaign_id")
+  name            String
+  race            String
+  characterClass  String              @map("character_class")
+  background      String
+  stats           Json
+  spells          String[]            @default([])
+  status          CharacterStatusEnum @default(pending)
+  rejectionReason String?             @map("rejection_reason")
+  proposedChanges Json?               @map("proposed_changes")
+  createdAt       DateTime            @map("created_at")
+  updatedAt       DateTime            @updatedAt @map("updated_at")
+
+  inventory Inventory?
+
+  @@unique([campaignId, userId])
+  @@map("characters")
+}
+
+model Inventory {
+  id             String          @id @default(uuid())
+  characterId    String          @unique @map("character_id")
+  campaignId     String          @map("campaign_id")
+  equipmentSlots Json            @default("{}") @map("equipment_slots")
+  backpackItems  Json            @default("[]") @map("backpack_items")
+  currentWeight  Float           @default(0) @map("current_weight")
+  maxCapacity    Float           @default(20) @map("max_capacity")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  character Character @relation(fields: [characterId], references: [id])
+  items     InventoryItem[]
+
+  @@index([campaignId])
+  @@map("inventories")
+}
+
+model InventoryItem {
+  id            String   @id
+  inventoryId   String   @map("inventory_id")
+  name          String
+  description   String   @default("")
+  weight        Float    @default(0)
+  slotType      String   @map("slot_type")
+  statModifiers Json     @default("{}") @map("stat_modifiers")
+  position      Int?
+  equippedSlot  String?  @map("equipped_slot")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+
+  @@index([inventoryId])
+  @@map("inventory_items")
+}
+
+model MapLevel {
+  id                 String   @id
+  campaignId         String   @map("campaign_id")
+  name               String   @db.VarChar(100)
+  parentId           String?  @map("parent_id")
+  depth              Int
+  backgroundImageUrl String?  @map("background_image_url") @db.VarChar(2048)
+  createdAt          DateTime @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  parent   MapLevel?  @relation("MapLevelHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children MapLevel[] @relation("MapLevelHierarchy")
+
+  @@index([campaignId])
+  @@map("map_levels")
+}
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  type        String
+  title       String
+  content     String
+  campaignId  String?   @map("campaign_id")
+  referenceId String?   @map("reference_id")
+  isRead      Boolean   @default(false) @map("is_read")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  campaign Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@unique([referenceId, userId, type])
+  @@index([userId, isRead])
+  @@index([campaignId])
+  @@map("notifications")
+}
