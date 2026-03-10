@@ -39,16 +39,38 @@ jest.mock("../token-layer", () => ({
     tokens,
     interactive,
     viewMode,
+    fogZones,
   }: {
     tokens: Token[];
     interactive: boolean;
     viewMode?: string;
+    fogZones?: unknown[];
   }) => (
     <div
       data-testid="token-layer"
       data-token-count={tokens.length}
       data-interactive={interactive}
       data-view-mode={viewMode ?? "gm"}
+      data-fog-count={fogZones?.length ?? 0}
+    />
+  ),
+}));
+
+jest.mock("../fog-overlay-layer", () => ({
+  FogOverlayLayer: ({
+    fogZones,
+    stageWidth,
+    stageHeight,
+  }: {
+    fogZones?: unknown[];
+    stageWidth: number;
+    stageHeight: number;
+  }) => (
+    <div
+      data-testid="fog-overlay-layer"
+      data-fog-count={fogZones?.length ?? 0}
+      data-stage-width={stageWidth}
+      data-stage-height={stageHeight}
     />
   ),
 }));
@@ -73,11 +95,11 @@ jest.mock("../map-controls", () => ({
 
 const mockMapLevel: MapLevel = {
   id: "level-1",
-  mapId: "map-1",
   campaignId: "campaign-1",
   name: "Ground Floor",
+  parentId: null,
+  depth: 0,
   backgroundImageUrl: "https://example.com/map.png",
-  sortOrder: 0,
   createdAt: "2026-03-09T10:00:00.000Z",
   updatedAt: "2026-03-09T10:00:00.000Z",
 };
@@ -248,5 +270,49 @@ describe("MapCanvas", () => {
     );
 
     expect(queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("should disable interactive handlers in player mode", () => {
+    const { getByTestId } = render(
+      <MapCanvas
+        mapLevel={mockMapLevel}
+        tokens={mockTokens}
+        interactive={false}
+        viewMode="player"
+      />
+    );
+
+    expect(getByTestId("token-layer").getAttribute("data-interactive")).toBe("false");
+  });
+
+  it("should pass fogZones to FogOverlayLayer and TokenLayer", () => {
+    const fogZones = [
+      { id: "fz-1", mapLevelId: "l1", playerId: "p1", x: 0, y: 0, width: 100, height: 100, revealed: true, createdAt: "2026-03-10" },
+    ];
+
+    const { getByTestId } = render(
+      <MapCanvas
+        mapLevel={mockMapLevel}
+        tokens={mockTokens}
+        interactive={false}
+        viewMode="player"
+        fogZones={fogZones}
+      />
+    );
+
+    expect(getByTestId("fog-overlay-layer").getAttribute("data-fog-count")).toBe("1");
+    expect(getByTestId("token-layer").getAttribute("data-fog-count")).toBe("1");
+  });
+
+  it("should render FogOverlayLayer with zero fog when no fogZones", () => {
+    const { getByTestId } = render(
+      <MapCanvas
+        mapLevel={mockMapLevel}
+        tokens={mockTokens}
+        interactive={true}
+      />
+    );
+
+    expect(getByTestId("fog-overlay-layer").getAttribute("data-fog-count")).toBe("0");
   });
 });

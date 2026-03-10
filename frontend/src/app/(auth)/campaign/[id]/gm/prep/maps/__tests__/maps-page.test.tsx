@@ -33,6 +33,14 @@ jest.mock("@clerk/nextjs", () => ({
   useAuth: () => ({ getToken: jest.fn().mockResolvedValue("mock-token") }),
 }));
 
+jest.mock("@/hooks/use-campaign", () => ({
+  useCampaign: () => ({
+    campaign: { name: "Test Campaign" },
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 jest.mock("@/hooks/use-map-levels", () => ({
   useMapLevels: () => ({
     mapLevels: mockMapLevels,
@@ -245,5 +253,26 @@ describe("GmPrepMapsPage", () => {
     expect(previewButton).toBeDisabled();
 
     spy.mockRestore();
+  });
+
+  it("renders breadcrumb with Dashboard, Campaign, and Maps", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    expect(screen.getByLabelText("breadcrumb")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/dashboard");
+    expect(screen.getByRole("link", { name: "Test Campaign" })).toHaveAttribute("href", "/campaign/c1/gm/prep");
+  });
+
+  it("renders back button linking to GM prep page", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    const backButton = screen.getByLabelText("Go back");
+    expect(backButton).toHaveAttribute("href", "/campaign/c1/gm/prep");
   });
 });

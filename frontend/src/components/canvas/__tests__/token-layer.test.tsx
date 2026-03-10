@@ -1,6 +1,6 @@
 import { render } from "@testing-library/react";
 import { TokenLayer } from "../token-layer";
-import type { Token } from "@/types/api";
+import type { Token, FogZone } from "@/types/api";
 
 // Mock react-konva
 jest.mock("react-konva", () => ({
@@ -121,5 +121,76 @@ describe("TokenLayer", () => {
 
     const groups = getAllByTestId("token-group");
     expect(groups[0].getAttribute("data-draggable")).toBe("true");
+  });
+
+  describe("fog-based visibility filtering", () => {
+    const revealedZone: FogZone = {
+      id: "fz-1",
+      mapLevelId: "level-1",
+      playerId: "p1",
+      x: 50,
+      y: 150,
+      width: 200,
+      height: 200,
+      revealed: true,
+      createdAt: "2026-03-10",
+    };
+
+    it("should filter tokens when fogZones provided in player mode", () => {
+      // token-1 at (100, 200) is within revealedZone (50-250, 150-350)
+      // token-2 at (300, 400) is outside revealedZone
+      const { getAllByTestId } = render(
+        <TokenLayer
+          tokens={mockTokens}
+          interactive={false}
+          viewMode="player"
+          fogZones={[revealedZone]}
+        />
+      );
+
+      const groups = getAllByTestId("token-group");
+      expect(groups).toHaveLength(1);
+
+      const labels = getAllByTestId("token-label");
+      expect(labels[0].textContent).toBe("Warrior");
+    });
+
+    it("should show all tokens when fogZones is empty", () => {
+      const { getAllByTestId } = render(
+        <TokenLayer
+          tokens={mockTokens}
+          interactive={false}
+          viewMode="player"
+          fogZones={[]}
+        />
+      );
+
+      expect(getAllByTestId("token-group")).toHaveLength(2);
+    });
+
+    it("should show all tokens when fogZones is undefined", () => {
+      const { getAllByTestId } = render(
+        <TokenLayer
+          tokens={mockTokens}
+          interactive={false}
+          viewMode="player"
+        />
+      );
+
+      expect(getAllByTestId("token-group")).toHaveLength(2);
+    });
+
+    it("should not filter tokens in gm mode even with fogZones", () => {
+      const { getAllByTestId } = render(
+        <TokenLayer
+          tokens={mockTokens}
+          interactive={true}
+          viewMode="gm"
+          fogZones={[revealedZone]}
+        />
+      );
+
+      expect(getAllByTestId("token-group")).toHaveLength(2);
+    });
   });
 });

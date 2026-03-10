@@ -3,9 +3,10 @@
 import { useRef, useState, useCallback, useEffect } from "react";
 import { Stage } from "react-konva";
 import type Konva from "konva";
-import type { MapLevel, Token } from "@/types/api";
+import type { MapLevel, Token, FogZone } from "@/types/api";
 import { MapBackgroundLayer } from "./map-background-layer";
 import { TokenLayer, type ViewMode } from "./token-layer";
+import { FogOverlayLayer } from "./fog-overlay-layer";
 import { MapControls } from "./map-controls";
 
 const MIN_SCALE = 0.1;
@@ -18,6 +19,7 @@ interface MapCanvasProps {
   interactive: boolean;
   viewMode?: ViewMode;
   playerId?: string;
+  fogZones?: FogZone[];
   onTokenPlace?: (
     tokenId: string,
     mapLevelId: string,
@@ -35,7 +37,7 @@ export function MapCanvas({
   tokens,
   interactive,
   viewMode = "gm",
-  playerId: _playerId,
+  fogZones,
   onTokenPlace,
   onTokenMove,
   onTokenRemove,
@@ -217,8 +219,14 @@ export function MapCanvas({
           tokens={tokens}
           interactive={effectiveInteractive}
           viewMode={viewMode}
+          fogZones={fogZones}
           onTokenMove={effectiveInteractive ? onTokenMove : undefined}
           onContextMenu={effectiveInteractive ? handleContextMenu : undefined}
+        />
+        <FogOverlayLayer
+          fogZones={fogZones}
+          stageWidth={dimensions.width}
+          stageHeight={dimensions.height}
         />
       </Stage>
 

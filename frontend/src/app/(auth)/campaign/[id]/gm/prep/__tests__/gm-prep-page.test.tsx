@@ -201,7 +201,37 @@ describe("GmPrepPage", () => {
       { wrapper: createWrapper() }
     );
 
-    expect(screen.getByText("Test Campaign")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Test Campaign" })).toBeInTheDocument();
+  });
+
+  it("renders breadcrumb with Dashboard and campaign name", () => {
+    render(
+      <GmPrepPage params={Promise.resolve({ id: "campaign-123" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    expect(screen.getByLabelText("breadcrumb")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/dashboard");
+  });
+
+  it("renders back button linking to dashboard", () => {
+    render(
+      <GmPrepPage params={Promise.resolve({ id: "campaign-123" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    const backButton = screen.getByLabelText("Go back");
+    expect(backButton).toHaveAttribute("href", "/dashboard");
+  });
+
+  it("renders Maps navigation card linking to maps page", () => {
+    render(
+      <GmPrepPage params={Promise.resolve({ id: "campaign-123" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    const mapsLink = screen.getByText("Maps").closest("a");
+    expect(mapsLink).toHaveAttribute("href", "/campaign/campaign-123/gm/prep/maps");
   });
 
   it("renders Player Invitations section", () => {

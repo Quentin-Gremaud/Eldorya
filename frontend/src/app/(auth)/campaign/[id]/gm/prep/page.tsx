@@ -21,7 +21,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, Megaphone, Archive, ShieldAlert, Users, Swords } from "lucide-react";
+import { AlertCircle, Megaphone, Archive, ShieldAlert, Users, Swords, ArrowLeft, Map, ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { AppBreadcrumb } from "@/components/layout/app-breadcrumb";
 
 export default function GmPrepPage({
   params,
@@ -71,18 +73,50 @@ export default function GmPrepPage({
   return (
     <main className="flex-1 p-6 lg:p-8">
       <div className="mx-auto max-w-3xl space-y-6">
+        <AppBreadcrumb
+          items={[
+            { label: "Dashboard", href: "/dashboard" },
+            { label: campaign?.name ?? "Campaign" },
+          ]}
+        />
+
         {/* Campaign Header */}
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" asChild aria-label="Go back">
+            <Link href="/dashboard">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <div>
+            {isLoading ? (
+              <Skeleton className="h-8 w-64" />
+            ) : (
+              <h1 className="text-2xl font-bold text-text-primary">
+                {campaign?.name ?? "Campaign"}
+              </h1>
+            )}
+            <p className="mt-1 text-sm text-text-secondary">
+              Campaign Management
+            </p>
+          </div>
+        </div>
+
+        {/* Maps Navigation */}
         <div>
-          {isLoading ? (
-            <Skeleton className="h-8 w-64" />
-          ) : (
-            <h1 className="text-2xl font-bold text-text-primary">
-              {campaign?.name ?? "Campaign"}
-            </h1>
-          )}
-          <p className="mt-1 text-sm text-text-secondary">
-            Campaign Management
-          </p>
+          <Link href={`/campaign/${campaignId}/gm/prep/maps`}>
+            <Card className="bg-surface-elevated transition-colors hover:bg-surface-elevated/80 cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Map className="h-5 w-5" />
+                  Maps
+                  <ChevronRight className="ml-auto h-4 w-4 text-text-muted" />
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-text-secondary">Manage campaign maps and levels</p>
+              </CardContent>
+            </Card>
+          </Link>
         </div>
 
         {/* Read-Only Banner for Archived Campaigns */}

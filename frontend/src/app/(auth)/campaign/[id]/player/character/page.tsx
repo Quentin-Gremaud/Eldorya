@@ -3,6 +3,7 @@
 import { use, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMyCharacter } from "@/hooks/use-my-character";
+import { useCampaign } from "@/hooks/use-campaign";
 import { CharacterForm } from "@/components/features/characters/character-form";
 import type { CharacterFormValues } from "@/components/features/characters/character-form";
 import { CharacterSheet } from "@/components/features/characters/character-sheet";
@@ -12,6 +13,8 @@ import { InventorySection } from "@/components/features/inventory/inventory-sect
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AppBreadcrumb } from "@/components/layout/app-breadcrumb";
+import Link from "next/link";
 
 function CharacterPageSkeleton() {
   return (
@@ -41,8 +44,29 @@ function templateToFormValues(
   };
 }
 
+function CharacterNavHeader({ campaignId, campaignName }: { campaignId: string; campaignName?: string }) {
+  return (
+    <div className="mb-4 space-y-2">
+      <AppBreadcrumb
+        items={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: campaignName ?? "Campaign", href: `/campaign/${campaignId}/player` },
+          { label: "Character" },
+        ]}
+      />
+      <Button variant="ghost" size="sm" asChild aria-label="Go back">
+        <Link href={`/campaign/${campaignId}/player`}>
+          <ArrowLeft className="mr-1 h-4 w-4" />
+          Back
+        </Link>
+      </Button>
+    </div>
+  );
+}
+
 export function PlayerCharacterContent({ campaignId }: { campaignId: string }) {
   const { character, isLoading, isError } = useMyCharacter(campaignId);
+  const { campaign } = useCampaign(campaignId);
   const queryClient = useQueryClient();
   const [templateStep, setTemplateStep] = useState<"select" | "form">(
     "select"
@@ -72,10 +96,13 @@ export function PlayerCharacterContent({ campaignId }: { campaignId: string }) {
     setTemplateStep("select");
   };
 
+  const navHeader = <CharacterNavHeader campaignId={campaignId} campaignName={campaign?.name} />;
+
   if (isLoading) {
     return (
       <main className="flex-1 p-6 lg:p-8">
         <div className="mx-auto max-w-4xl">
+          {navHeader}
           <CharacterPageSkeleton />
         </div>
       </main>
@@ -86,6 +113,7 @@ export function PlayerCharacterContent({ campaignId }: { campaignId: string }) {
     return (
       <main className="flex-1 p-6 lg:p-8">
         <div className="mx-auto max-w-2xl">
+          {navHeader}
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <AlertCircle className="mb-4 h-10 w-10 text-destructive" />
             <h3 className="text-lg font-semibold">
@@ -128,6 +156,7 @@ export function PlayerCharacterContent({ campaignId }: { campaignId: string }) {
     return (
       <main className="flex-1 p-6 lg:p-8">
         <div className="mx-auto max-w-2xl">
+          {navHeader}
           <Button
             variant="ghost"
             size="sm"
@@ -154,6 +183,7 @@ export function PlayerCharacterContent({ campaignId }: { campaignId: string }) {
     return (
       <main className="flex-1 p-6 lg:p-8">
         <div className="mx-auto max-w-2xl space-y-4">
+          {navHeader}
           {character.status === "rejected" && character.rejectionReason && (
             <div className="rounded-md border border-red-500/30 bg-red-500/10 px-4 py-3">
               <p className="text-sm font-medium text-red-400 mb-1">
@@ -186,6 +216,7 @@ export function PlayerCharacterContent({ campaignId }: { campaignId: string }) {
     return (
       <main className="flex-1 p-6 lg:p-8">
         <div className="mx-auto max-w-4xl">
+          {navHeader}
           <CharacterTemplatePicker
             onSelectTemplate={handleSelectTemplate}
             onStartFromScratch={handleStartFromScratch}
@@ -198,6 +229,7 @@ export function PlayerCharacterContent({ campaignId }: { campaignId: string }) {
   return (
     <main className="flex-1 p-6 lg:p-8">
       <div className="mx-auto max-w-2xl">
+        {navHeader}
         <Button
           variant="ghost"
           size="sm"

@@ -23,6 +23,14 @@ jest.mock("sonner", () => ({
   toast: { success: jest.fn(), error: jest.fn() },
 }));
 
+jest.mock("@/hooks/use-campaign", () => ({
+  useCampaign: () => ({
+    campaign: { name: "Test Campaign" },
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 jest.mock("@/hooks/use-request-character-modification", () => ({
   useRequestCharacterModification: () => ({
     mutate: jest.fn(),
@@ -218,6 +226,37 @@ describe("PlayerCharacterPage integration", () => {
 
     expect(screen.getByText("Failed to load character data")).toBeInTheDocument();
     expect(screen.getByText("Retry")).toBeInTheDocument();
+  });
+
+  it("renders breadcrumb with Dashboard, Campaign, and Character", () => {
+    mockUseMyCharacter.mockReturnValue({
+      character: null,
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<PlayerCharacterContent campaignId="campaign-1" />, {
+      wrapper: createWrapper(),
+    });
+
+    expect(screen.getByLabelText("breadcrumb")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/dashboard");
+    expect(screen.getByRole("link", { name: "Test Campaign" })).toHaveAttribute("href", "/campaign/campaign-1/player");
+  });
+
+  it("renders back button linking to player hub", () => {
+    mockUseMyCharacter.mockReturnValue({
+      character: null,
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<PlayerCharacterContent campaignId="campaign-1" />, {
+      wrapper: createWrapper(),
+    });
+
+    const backButton = screen.getByLabelText("Go back");
+    expect(backButton).toHaveAttribute("href", "/campaign/campaign-1/player");
   });
 
   describe("rejection resubmission flow", () => {

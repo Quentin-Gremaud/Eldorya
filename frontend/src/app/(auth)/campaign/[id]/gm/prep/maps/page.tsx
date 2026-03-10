@@ -20,7 +20,10 @@ import { PlayerPreviewBar } from "@/components/features/maps/player-preview-bar"
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertCircle, Plus, Map, Eye } from "lucide-react";
+import { AlertCircle, Plus, Map, Eye, ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { useCampaign } from "@/hooks/use-campaign";
+import { AppBreadcrumb } from "@/components/layout/app-breadcrumb";
 
 export default function GmPrepMapsPage({
   params,
@@ -29,6 +32,7 @@ export default function GmPrepMapsPage({
 }) {
   const { id: campaignId } = use(params);
   const queryClient = useQueryClient();
+  const { campaign } = useCampaign(campaignId);
   const { mapLevels, isLoading, isError } = useMapLevels(campaignId);
   const createMapLevel = useCreateMapLevel(campaignId);
   const renameMapLevel = useRenameMapLevel(campaignId);
@@ -119,6 +123,22 @@ export default function GmPrepMapsPage({
 
   return (
     <main className="flex-1 flex flex-col h-full">
+      {/* App-level navigation */}
+      <div className="flex items-center gap-3 px-4 pt-3 pb-1">
+        <Button variant="ghost" size="icon" className="h-7 w-7" asChild aria-label="Go back">
+          <Link href={`/campaign/${campaignId}/gm/prep`}>
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+        </Button>
+        <AppBreadcrumb
+          items={[
+            { label: "Dashboard", href: "/dashboard" },
+            { label: campaign?.name ?? "Campaign", href: `/campaign/${campaignId}/gm/prep` },
+            { label: "Maps" },
+          ]}
+        />
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-2">

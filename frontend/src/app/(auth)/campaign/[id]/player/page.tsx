@@ -6,12 +6,15 @@ import Link from "next/link";
 import { useCampaign } from "@/hooks/use-campaign";
 import { useCampaignAnnouncements } from "@/hooks/use-campaign-announcements";
 import { useMyCharacter } from "@/hooks/use-my-character";
+import { useMapLevels } from "@/hooks/use-map-levels";
 import { AnnouncementList } from "@/components/features/campaigns/announcement-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Calendar, User, Map, BookOpen, Backpack, Megaphone, AlertCircle, ChevronRight } from "lucide-react";
+import { Users, Calendar, User, Map, BookOpen, Backpack, Megaphone, AlertCircle, ChevronRight, ArrowLeft } from "lucide-react";
 import { formatRelativeDate } from "@/lib/utils";
+import { AppBreadcrumb } from "@/components/layout/app-breadcrumb";
+import { Button } from "@/components/ui/button";
 
 export function PlayerCampaignContent({
   campaignId,
@@ -26,6 +29,7 @@ export function PlayerCampaignContent({
     isError: isAnnouncementsError,
   } = useCampaignAnnouncements(campaignId);
   const { character, isLoading: isCharacterLoading } = useMyCharacter(campaignId);
+  const { mapLevels, isLoading: isMapLevelsLoading } = useMapLevels(campaignId);
   const router = useRouter();
 
   useEffect(() => {
@@ -58,29 +62,43 @@ export function PlayerCampaignContent({
   return (
     <main className="flex-1 p-6 lg:p-8">
       <div className="mx-auto max-w-3xl space-y-6">
+        <AppBreadcrumb
+          items={[
+            { label: "Dashboard", href: "/dashboard" },
+            { label: campaign.name },
+          ]}
+        />
+
         {/* Campaign Header */}
-        <div>
-          <h1 className="text-2xl font-bold text-text-primary">
-            {campaign.name}
-          </h1>
-          <p className="mt-1 text-sm text-text-secondary">
-            GM: {campaign.gmDisplayName}
-          </p>
-          <div className="mt-2 flex items-center gap-4 text-sm text-text-muted">
-            <span className="flex items-center gap-1">
-              <Users className="h-4 w-4" />
-              {campaign.playerCount} players
-            </span>
-            {campaign.lastSessionDate && (() => {
-              const relative = formatRelativeDate(campaign.lastSessionDate);
-              if (!relative) return null;
-              return (
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-4 w-4" />
-                  Last session {relative}
-                </span>
-              );
-            })()}
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" asChild aria-label="Go back">
+            <Link href="/dashboard">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-text-primary">
+              {campaign.name}
+            </h1>
+            <p className="mt-1 text-sm text-text-secondary">
+              GM: {campaign.gmDisplayName}
+            </p>
+            <div className="mt-1 flex items-center gap-4 text-sm text-text-muted">
+              <span className="flex items-center gap-1">
+                <Users className="h-4 w-4" />
+                {campaign.playerCount} players
+              </span>
+              {campaign.lastSessionDate && (() => {
+                const relative = formatRelativeDate(campaign.lastSessionDate);
+                if (!relative) return null;
+                return (
+                  <span className="flex items-center gap-1">
+                    <Calendar className="h-4 w-4" />
+                    Last session {relative}
+                  </span>
+                );
+              })()}
+            </div>
           </div>
         </div>
 
@@ -153,19 +171,28 @@ export function PlayerCampaignContent({
             </Card>
           </Link>
 
-          <Card className="bg-surface-elevated">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Map className="h-5 w-5" />
-                Map
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-text-muted">
-                Map exploration coming in Epic 4
-              </p>
-            </CardContent>
-          </Card>
+          <Link href={`/campaign/${campaignId}/player/maps`}>
+            <Card className="bg-surface-elevated transition-colors hover:bg-surface-elevated/80 cursor-pointer">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Map className="h-5 w-5" />
+                  Map
+                  <ChevronRight className="ml-auto h-4 w-4 text-text-muted" />
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isMapLevelsLoading ? (
+                  <Skeleton className="h-4 w-32" />
+                ) : mapLevels.length > 0 ? (
+                  <p className="text-sm text-text-secondary">
+                    {mapLevels.length} map level{mapLevels.length > 1 ? "s" : ""} available
+                  </p>
+                ) : (
+                  <p className="text-sm text-text-muted">No maps yet</p>
+                )}
+              </CardContent>
+            </Card>
+          </Link>
 
           <Card className="bg-surface-elevated">
             <CardHeader>
