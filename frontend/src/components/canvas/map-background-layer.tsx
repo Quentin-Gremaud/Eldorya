@@ -5,10 +5,12 @@ import { Layer, Image as KonvaImage, Text } from "react-konva";
 
 interface MapBackgroundLayerProps {
   backgroundImageUrl: string | null;
+  onImageLoad?: (dimensions: { width: number; height: number }) => void;
 }
 
 export function MapBackgroundLayer({
   backgroundImageUrl,
+  onImageLoad,
 }: MapBackgroundLayerProps) {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -24,19 +26,22 @@ export function MapBackgroundLayer({
     const img = new window.Image();
     img.crossOrigin = "anonymous";
     img.src = backgroundImageUrl;
-    img.onload = () => setImage(img);
+    img.onload = () => {
+      setImage(img);
+      onImageLoad?.({ width: img.naturalWidth, height: img.naturalHeight });
+    };
     img.onerror = () => setLoadError(true);
 
     return () => {
       img.onload = null;
       img.onerror = null;
     };
-  }, [backgroundImageUrl]);
+  }, [backgroundImageUrl, onImageLoad]);
 
   return (
     <Layer listening={false}>
       {image && (
-        <KonvaImage image={image} x={0} y={0} width={image.width} height={image.height} />
+        <KonvaImage image={image} x={0} y={0} width={image.naturalWidth} height={image.naturalHeight} />
       )}
       {loadError && (
         <Text

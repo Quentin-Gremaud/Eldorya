@@ -47,6 +47,7 @@ export function MapCanvas({
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [scale, setScale] = useState(1);
   const [contextMenu, setContextMenu] = useState<{
     tokenId: string;
@@ -76,6 +77,43 @@ export function MapCanvas({
 
     return () => observer.disconnect();
   }, []);
+
+  const handleImageLoad = useCallback((dims: { width: number; height: number }) => {
+    setImageDimensions(dims);
+    // Auto-fit: scale so the full image fits in the viewport
+    const container = containerRef.current;
+    if (!container) return;
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight;
+    const fitScale = Math.min(containerWidth / dims.width, containerHeight / dims.height, 1);
+    const offsetX = (containerWidth - dims.width * fitScale) / 2;
+    const offsetY = (containerHeight - dims.height * fitScale) / 2;
+
+    const stage = stageRef.current;
+    if (stage) {
+      stage.scale({ x: fitScale, y: fitScale });
+      stage.position({ x: offsetX, y: offsetY });
+      stage.batchDraw();
+    }
+    setScale(fitScale);
+  }, []);
+
+  const handleFitToImage = useCallback(() => {
+    if (!imageDimensions || !containerRef.current) return;
+    const containerWidth = containerRef.current.clientWidth;
+    const containerHeight = containerRef.current.clientHeight;
+    const fitScale = Math.min(containerWidth / imageDimensions.width, containerHeight / imageDimensions.height, 1);
+    const offsetX = (containerWidth - imageDimensions.width * fitScale) / 2;
+    const offsetY = (containerHeight - imageDimensions.height * fitScale) / 2;
+
+    const stage = stageRef.current;
+    if (stage) {
+      stage.scale({ x: fitScale, y: fitScale });
+      stage.position({ x: offsetX, y: offsetY });
+      stage.batchDraw();
+    }
+    setScale(fitScale);
+  }, [imageDimensions]);
 
   const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
     e.evt.preventDefault();
@@ -214,7 +252,7 @@ export function MapCanvas({
         onWheel={handleWheel}
         onClick={handleStageClick}
       >
-        <MapBackgroundLayer backgroundImageUrl={mapLevel.backgroundImageUrl} />
+        <MapBackgroundLayer backgroundImageUrl={mapLevel.backgroundImageUrl} onImageLoad={handleImageLoad} />
         <TokenLayer
           tokens={tokens}
           interactive={effectiveInteractive}
@@ -234,6 +272,7 @@ export function MapCanvas({
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onResetZoom={handleResetZoom}
+        onFitToImage={imageDimensions ? handleFitToImage : undefined}
       />
 
       {/* Context menu for token removal */}

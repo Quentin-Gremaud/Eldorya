@@ -1,15 +1,16 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { ZoomIn, ZoomOut, Maximize } from "lucide-react";
+import { ZoomIn, ZoomOut, Maximize, ImageIcon } from "lucide-react";
 
 interface MapControlsProps {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onResetZoom: () => void;
+  onFitToImage?: () => void;
 }
 
-export function MapControls({ onZoomIn, onZoomOut, onResetZoom }: MapControlsProps) {
+export function MapControls({ onZoomIn, onZoomOut, onResetZoom, onFitToImage }: MapControlsProps) {
   return (
     <div className="absolute top-2 right-2 flex flex-col gap-1 z-10">
       <Button variant="outline" size="icon" onClick={onZoomIn} title="Zoom in" aria-label="Zoom in">
@@ -21,6 +22,11 @@ export function MapControls({ onZoomIn, onZoomOut, onResetZoom }: MapControlsPro
       <Button variant="outline" size="icon" onClick={onResetZoom} title="Reset zoom" aria-label="Reset zoom">
         <Maximize className="h-4 w-4" />
       </Button>
+      {onFitToImage && (
+        <Button variant="outline" size="icon" onClick={onFitToImage} title="Fit to image" aria-label="Fit to image">
+          <ImageIcon className="h-4 w-4" />
+        </Button>
+      )}
     </div>
   );
 }

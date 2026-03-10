@@ -29,8 +29,8 @@ jest.mock("react-konva", () => ({
 
 // Mock child components
 jest.mock("../map-background-layer", () => ({
-  MapBackgroundLayer: ({ backgroundImageUrl }: { backgroundImageUrl: string | null }) => (
-    <div data-testid="background-layer" data-url={backgroundImageUrl} />
+  MapBackgroundLayer: ({ backgroundImageUrl, onImageLoad }: { backgroundImageUrl: string | null; onImageLoad?: (dims: { width: number; height: number }) => void }) => (
+    <div data-testid="background-layer" data-url={backgroundImageUrl} data-has-onimageload={!!onImageLoad} />
   ),
 }));
 
@@ -80,15 +80,18 @@ jest.mock("../map-controls", () => ({
     onZoomIn,
     onZoomOut,
     onResetZoom,
+    onFitToImage,
   }: {
     onZoomIn: () => void;
     onZoomOut: () => void;
     onResetZoom: () => void;
+    onFitToImage?: () => void;
   }) => (
-    <div data-testid="map-controls">
+    <div data-testid="map-controls" data-has-fit-to-image={!!onFitToImage}>
       <button data-testid="zoom-in" onClick={onZoomIn} />
       <button data-testid="zoom-out" onClick={onZoomOut} />
       <button data-testid="reset-zoom" onClick={onResetZoom} />
+      {onFitToImage && <button data-testid="fit-to-image" onClick={onFitToImage} />}
     </div>
   ),
 }));
@@ -302,6 +305,18 @@ describe("MapCanvas", () => {
 
     expect(getByTestId("fog-overlay-layer").getAttribute("data-fog-count")).toBe("1");
     expect(getByTestId("token-layer").getAttribute("data-fog-count")).toBe("1");
+  });
+
+  it("should pass onImageLoad to MapBackgroundLayer", () => {
+    const { getByTestId } = render(
+      <MapCanvas
+        mapLevel={mockMapLevel}
+        tokens={mockTokens}
+        interactive={true}
+      />
+    );
+
+    expect(getByTestId("background-layer").getAttribute("data-has-onimageload")).toBe("true");
   });
 
   it("should render FogOverlayLayer with zero fog when no fogZones", () => {
