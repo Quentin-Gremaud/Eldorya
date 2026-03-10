@@ -103,4 +103,23 @@ describe("TokenLayer", () => {
 
     expect(queryAllByTestId("token-group")).toHaveLength(0);
   });
+
+  it("should set tokens non-draggable in preview mode", () => {
+    const { getAllByTestId } = render(
+      <TokenLayer tokens={mockTokens} interactive={false} viewMode="preview" />
+    );
+
+    const groups = getAllByTestId("token-group");
+    expect(groups[0].getAttribute("data-draggable")).toBe("false");
+    expect(groups[1].getAttribute("data-draggable")).toBe("false");
+  });
+
+  it("should keep tokens draggable in gm mode when interactive", () => {
+    const { getAllByTestId } = render(
+      <TokenLayer tokens={mockTokens} interactive={true} viewMode="gm" />
+    );
+
+    const groups = getAllByTestId("token-group");
+    expect(groups[0].getAttribute("data-draggable")).toBe("true");
+  });
 });

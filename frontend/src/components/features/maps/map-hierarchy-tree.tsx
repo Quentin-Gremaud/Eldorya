@@ -7,7 +7,7 @@ interface MapHierarchyTreeProps {
   levels: MapLevel[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onRename: (id: string, newName: string) => void;
+  onRename?: (id: string, newName: string) => void;
 }
 
 export function MapHierarchyTree({

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMapLevels } from "@/hooks/use-map-levels";
 import { useCreateMapLevel } from "@/hooks/use-create-map-level";
@@ -9,15 +9,18 @@ import { useTokens } from "@/hooks/use-tokens";
 import { usePlaceToken } from "@/hooks/use-place-token";
 import { useMoveToken } from "@/hooks/use-move-token";
 import { useRemoveToken } from "@/hooks/use-remove-token";
+import { useCampaignPlayers } from "@/hooks/use-campaign-players";
 import { MapHierarchyTree } from "@/components/features/maps/map-hierarchy-tree";
 import { MapBreadcrumb } from "@/components/features/maps/map-breadcrumb";
 import { CreateMapLevelDialog } from "@/components/features/maps/create-map-level-dialog";
 import { ImportMapBackgroundButton } from "@/components/features/maps/import-map-background-button";
 import { MapCanvas } from "@/components/canvas/map-canvas";
 import { TokenPalette } from "@/components/features/maps/token-palette";
+import { PlayerPreviewBar } from "@/components/features/maps/player-preview-bar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, Plus, Map, Upload } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { AlertCircle, Plus, Map, Eye } from "lucide-react";
 
 export default function GmPrepMapsPage({
   params,
@@ -29,11 +32,39 @@ export default function GmPrepMapsPage({
   const { mapLevels, isLoading, isError } = useMapLevels(campaignId);
   const createMapLevel = useCreateMapLevel(campaignId);
   const renameMapLevel = useRenameMapLevel(campaignId);
+  const { players } = useCampaignPlayers(campaignId);
 
   const [selectedMapLevelId, setSelectedMapLevelId] = useState<string | null>(
     null
   );
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [previewPlayerId, setPreviewPlayerId] = useState<string | null>(null);
+
+  const exitPreview = useCallback(() => {
+    setIsPreviewMode(false);
+    setPreviewPlayerId(null);
+  }, []);
+
+  const enterPreview = useCallback(() => {
+    if (players.length > 0) {
+      setIsPreviewMode(true);
+      setPreviewPlayerId(players[0].userId);
+    }
+  }, [players]);
+
+  useEffect(() => {
+    if (!isPreviewMode) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        exitPreview();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isPreviewMode, exitPreview]);
 
   const { tokens, isLoading: tokensLoading, isError: tokensError } = useTokens(
     campaignId,
@@ -94,10 +125,12 @@ export default function GmPrepMapsPage({
           <Map className="h-5 w-5 text-muted-foreground" />
           <h1 className="text-xl font-bold text-foreground">Map Hierarchy</h1>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-1" />
-          Create Map Level
-        </Button>
+        {!isPreviewMode && (
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" />
+            Create Map Level
+          </Button>
+        )}
       </div>
 
       {/* Breadcrumb */}
@@ -143,7 +176,7 @@ export default function GmPrepMapsPage({
               levels={mapLevels}
               selectedId={selectedMapLevelId}
               onSelect={setSelectedMapLevelId}
-              onRename={handleRenameLevel}
+              onRename={!isPreviewMode ? handleRenameLevel : undefined}
             />
           )}
         </div>
@@ -157,14 +190,43 @@ export default function GmPrepMapsPage({
                 <p className="text-sm font-medium text-foreground">
                   {selectedLevel.name}
                 </p>
-                <ImportMapBackgroundButton
-                  campaignId={campaignId}
-                  mapLevelId={selectedLevel.id}
-                />
+                <div className="flex items-center gap-2">
+                  {!isPreviewMode && (
+                    <>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={enterPreview}
+                            disabled={players.length === 0}
+                            aria-label="Preview Player View"
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            Preview Player View
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Preview what a player sees</TooltipContent>
+                      </Tooltip>
+                      <ImportMapBackgroundButton
+                        campaignId={campaignId}
+                        mapLevelId={selectedLevel.id}
+                      />
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Canvas with tokens */}
               <div className="flex-1 overflow-hidden relative">
+                {isPreviewMode && previewPlayerId && (
+                  <PlayerPreviewBar
+                    playerId={previewPlayerId}
+                    players={players}
+                    onPlayerChange={setPreviewPlayerId}
+                    onExit={exitPreview}
+                  />
+                )}
                 {tokensError ? (
                   <div className="flex flex-col items-center justify-center h-full">
                     <AlertCircle className="h-8 w-8 text-destructive mb-2" />
@@ -187,6 +249,8 @@ export default function GmPrepMapsPage({
                     mapLevel={selectedLevel}
                     tokens={tokens}
                     interactive={true}
+                    viewMode={isPreviewMode ? "preview" : "gm"}
+                    playerId={isPreviewMode ? previewPlayerId ?? undefined : undefined}
                     onTokenPlace={handleTokenPlace}
                     onTokenMove={handleTokenMove}
                     onTokenRemove={handleTokenRemove}
@@ -207,8 +271,8 @@ export default function GmPrepMapsPage({
           )}
         </div>
 
-        {/* Right sidebar - Token Palette */}
-        {selectedLevel && (
+        {/* Right sidebar - Token Palette (hidden in preview mode) */}
+        {selectedLevel && !isPreviewMode && (
           <div className="w-56 border-l overflow-y-auto">
             <TokenPalette />
           </div>

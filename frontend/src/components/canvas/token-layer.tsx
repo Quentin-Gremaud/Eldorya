@@ -7,9 +7,12 @@ import { TOKEN_COLORS, TOKEN_FALLBACK_COLOR } from "./token-colors";
 
 const TOKEN_SIZE = 40;
 
+export type ViewMode = "gm" | "player" | "preview";
+
 interface TokenLayerProps {
   tokens: Token[];
   interactive: boolean;
+  viewMode?: ViewMode;
   onTokenMove?: (tokenId: string, x: number, y: number) => void;
   onContextMenu?: (tokenId: string, x: number, y: number) => void;
 }
@@ -17,6 +20,7 @@ interface TokenLayerProps {
 export function TokenLayer({
   tokens,
   interactive,
+  viewMode: _viewMode = "gm",
   onTokenMove,
   onContextMenu,
 }: TokenLayerProps) {
@@ -51,7 +55,7 @@ export function TokenLayer({
             y={token.y}
             draggable={interactive}
             onDragEnd={(e) => handleDragEnd(token.id, e)}
-            onContextMenu={(e) => handleContextMenu(token.id, e)}
+            onContextMenu={interactive ? (e) => handleContextMenu(token.id, e) : undefined}
           >
             <Circle
               radius={TOKEN_SIZE / 2}

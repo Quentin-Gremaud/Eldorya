@@ -5,7 +5,7 @@ import { Stage } from "react-konva";
 import type Konva from "konva";
 import type { MapLevel, Token } from "@/types/api";
 import { MapBackgroundLayer } from "./map-background-layer";
-import { TokenLayer } from "./token-layer";
+import { TokenLayer, type ViewMode } from "./token-layer";
 import { MapControls } from "./map-controls";
 
 const MIN_SCALE = 0.1;
@@ -16,6 +16,8 @@ interface MapCanvasProps {
   mapLevel: MapLevel;
   tokens: Token[];
   interactive: boolean;
+  viewMode?: ViewMode;
+  playerId?: string;
   onTokenPlace?: (
     tokenId: string,
     mapLevelId: string,
@@ -32,10 +34,14 @@ export function MapCanvas({
   mapLevel,
   tokens,
   interactive,
+  viewMode = "gm",
+  playerId: _playerId,
   onTokenPlace,
   onTokenMove,
   onTokenRemove,
 }: MapCanvasProps) {
+  const isGmMode = viewMode === "gm";
+  const effectiveInteractive = interactive && isGmMode;
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -195,8 +201,8 @@ export function MapCanvas({
     <div
       ref={containerRef}
       className="relative w-full h-full"
-      onDrop={handleDrop}
-      onDragOver={handleDragOver}
+      onDrop={isGmMode ? handleDrop : undefined}
+      onDragOver={isGmMode ? handleDragOver : undefined}
     >
       <Stage
         ref={stageRef}
@@ -209,9 +215,10 @@ export function MapCanvas({
         <MapBackgroundLayer backgroundImageUrl={mapLevel.backgroundImageUrl} />
         <TokenLayer
           tokens={tokens}
-          interactive={interactive}
-          onTokenMove={onTokenMove}
-          onContextMenu={handleContextMenu}
+          interactive={effectiveInteractive}
+          viewMode={viewMode}
+          onTokenMove={effectiveInteractive ? onTokenMove : undefined}
+          onContextMenu={effectiveInteractive ? handleContextMenu : undefined}
         />
       </Stage>
 
@@ -222,7 +229,7 @@ export function MapCanvas({
       />
 
       {/* Context menu for token removal */}
-      {contextMenu && (
+      {isGmMode && contextMenu && (
         <div
           role="menu"
           className="absolute z-20 bg-popover border rounded-md shadow-md py-1 min-w-[140px]"

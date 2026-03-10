@@ -13,7 +13,7 @@ interface MapLevelTreeItemProps {
   allLevels: MapLevel[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onRename: (id: string, newName: string) => void;
+  onRename?: (id: string, newName: string) => void;
 }
 
 export function MapLevelTreeItem({
@@ -32,7 +32,7 @@ export function MapLevelTreeItem({
   const isSelected = selectedId === level.id;
 
   const handleRename = () => {
-    if (editName.trim() && editName.trim() !== level.name) {
+    if (onRename && editName.trim() && editName.trim() !== level.name) {
       onRename(level.id, editName.trim());
     }
     setIsEditing(false);
@@ -114,19 +114,21 @@ export function MapLevelTreeItem({
             >
               {level.name}
             </span>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-5 w-5 opacity-0 group-hover:opacity-100 hover:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditName(level.name);
-                setIsEditing(true);
-              }}
-              aria-label="Rename"
-            >
-              <Pencil className="h-3 w-3" />
-            </Button>
+            {onRename && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 opacity-0 group-hover:opacity-100 hover:opacity-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditName(level.name);
+                  setIsEditing(true);
+                }}
+                aria-label="Rename"
+              >
+                <Pencil className="h-3 w-3" />
+              </Button>
+            )}
           </>
         )}
       </div>

@@ -1,7 +1,16 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { createElement } from "react";
 import GmPrepMapsPage from "../page";
+
+// Mock ResizeObserver
+class MockResizeObserver {
+  observe = jest.fn();
+  unobserve = jest.fn();
+  disconnect = jest.fn();
+}
+global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
 jest.mock("react", () => {
   const actual = jest.requireActual("react");
@@ -76,6 +85,22 @@ jest.mock("@/hooks/use-remove-token", () => ({
   }),
 }));
 
+const mockPlayers = [
+  { userId: "p1", displayName: "Alice", status: "ready" as const, joinedAt: "2026-03-08" },
+  { userId: "p2", displayName: "Bob", status: "joined" as const, joinedAt: "2026-03-08" },
+];
+
+jest.mock("@/hooks/use-campaign-players", () => ({
+  useCampaignPlayers: () => ({
+    players: mockPlayers,
+    playerCount: 2,
+    isLoading: false,
+    isError: false,
+    hasActiveInvitation: false,
+    allReady: false,
+  }),
+}));
+
 jest.mock("react-konva", () => ({
   Stage: ({ children }: { children: React.ReactNode }) => <div data-testid="stage">{children}</div>,
   Layer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -97,7 +122,7 @@ function createWrapper() {
     return createElement(
       QueryClientProvider,
       { client: queryClient },
-      children
+      createElement(TooltipProvider, null, children)
     );
   };
 }
@@ -129,5 +154,96 @@ describe("GmPrepMapsPage", () => {
     );
 
     expect(screen.getByText("Select a map level")).toBeInTheDocument();
+  });
+
+  it("should render preview player view button when players exist", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    // Select a map level first to show the canvas area
+    fireEvent.click(screen.getByText("World"));
+
+    expect(screen.getByRole("button", { name: /preview.*player.*view/i })).toBeInTheDocument();
+  });
+
+  it("should enter preview mode when preview button clicked", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+    fireEvent.click(screen.getByRole("button", { name: /preview.*player.*view/i }));
+
+    expect(screen.getByText(/previewing as/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /exit preview/i })).toBeInTheDocument();
+  });
+
+  it("should exit preview mode when exit button clicked", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+    fireEvent.click(screen.getByRole("button", { name: /preview.*player.*view/i }));
+    expect(screen.getByText(/previewing as/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /exit preview/i }));
+    expect(screen.queryByText(/previewing as/i)).not.toBeInTheDocument();
+  });
+
+  it("should exit preview mode when Escape key pressed", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+    fireEvent.click(screen.getByRole("button", { name: /preview.*player.*view/i }));
+    expect(screen.getByText(/previewing as/i)).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByText(/previewing as/i)).not.toBeInTheDocument();
+  });
+
+  it("should hide token palette in preview mode", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+    // Token palette should be visible in normal mode
+    expect(screen.getByText("Tokens")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /preview.*player.*view/i }));
+    // Token palette should be hidden in preview mode
+    expect(screen.queryByText("Tokens")).not.toBeInTheDocument();
+  });
+
+  it("should disable preview button when no players exist", () => {
+    const useCampaignPlayersMock = jest.requireMock("@/hooks/use-campaign-players");
+    const spy = jest.spyOn(useCampaignPlayersMock, "useCampaignPlayers").mockReturnValue({
+      players: [],
+      playerCount: 0,
+      isLoading: false,
+      isError: false,
+      hasActiveInvitation: false,
+      allReady: false,
+    });
+
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+    const previewButton = screen.getByRole("button", { name: /preview.*player.*view/i });
+    expect(previewButton).toBeDisabled();
+
+    spy.mockRestore();
   });
 });

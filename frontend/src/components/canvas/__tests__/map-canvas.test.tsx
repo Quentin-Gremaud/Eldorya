@@ -38,14 +38,17 @@ jest.mock("../token-layer", () => ({
   TokenLayer: ({
     tokens,
     interactive,
+    viewMode,
   }: {
     tokens: Token[];
     interactive: boolean;
+    viewMode?: string;
   }) => (
     <div
       data-testid="token-layer"
       data-token-count={tokens.length}
       data-interactive={interactive}
+      data-view-mode={viewMode ?? "gm"}
     />
   ),
 }));
@@ -194,5 +197,56 @@ describe("MapCanvas", () => {
     );
 
     expect(getByTestId("token-layer").getAttribute("data-token-count")).toBe("0");
+  });
+
+  it("should default viewMode to gm", () => {
+    const { getByTestId } = render(
+      <MapCanvas
+        mapLevel={mockMapLevel}
+        tokens={mockTokens}
+        interactive={true}
+      />
+    );
+
+    expect(getByTestId("token-layer").getAttribute("data-view-mode")).toBe("gm");
+  });
+
+  it("should pass viewMode to TokenLayer", () => {
+    const { getByTestId } = render(
+      <MapCanvas
+        mapLevel={mockMapLevel}
+        tokens={mockTokens}
+        interactive={true}
+        viewMode="preview"
+      />
+    );
+
+    expect(getByTestId("token-layer").getAttribute("data-view-mode")).toBe("preview");
+  });
+
+  it("should disable interactive handlers in preview mode", () => {
+    const { getByTestId } = render(
+      <MapCanvas
+        mapLevel={mockMapLevel}
+        tokens={mockTokens}
+        interactive={true}
+        viewMode="preview"
+      />
+    );
+
+    expect(getByTestId("token-layer").getAttribute("data-interactive")).toBe("false");
+  });
+
+  it("should not render context menu in preview mode", () => {
+    const { queryByRole } = render(
+      <MapCanvas
+        mapLevel={mockMapLevel}
+        tokens={mockTokens}
+        interactive={true}
+        viewMode="preview"
+      />
+    );
+
+    expect(queryByRole("menu")).not.toBeInTheDocument();
   });
 });
