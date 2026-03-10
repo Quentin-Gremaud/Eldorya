@@ -20,6 +20,7 @@ import { CharacterPresentationModule } from './presentation/character/character-
 import { InventoryPresentationModule } from './presentation/inventory/inventory-presentation.module.js';
 import { MapPresentationModule } from './presentation/map/map-presentation.module.js';
 import { TokenPresentationModule } from './presentation/token/token-presentation.module.js';
+import { FogPresentationModule } from './presentation/fog/fog-presentation.module.js';
 
 // Bounded Contexts
 import { CampaignModule } from './campaign/campaign.module.js';
@@ -57,6 +58,7 @@ import { SubscriptionModule } from './subscription/subscription.module.js';
     InventoryPresentationModule,
     MapPresentationModule,
     TokenPresentationModule,
+    FogPresentationModule,
 
     // Bounded Contexts
     CampaignModule,

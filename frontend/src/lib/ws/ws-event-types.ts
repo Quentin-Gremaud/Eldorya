@@ -4,4 +4,7 @@
 export const WS_COMMANDS = {} as const;
 
 // Server → Client (PascalCase past tense)
-export const WS_EVENTS = {} as const;
+export const WS_EVENTS = {
+  FogZoneRevealed: 'FogZoneRevealed',
+  FogZoneHidden: 'FogZoneHidden',
+} as const;

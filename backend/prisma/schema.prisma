@@ -212,6 +212,19 @@ model Token {
   @@map("tokens")
 }
 
+model FogState {
+  id             String   @id @default(uuid())
+  campaignId     String   @map("campaign_id")
+  playerId       String   @map("player_id")
+  mapLevelId     String   @map("map_level_id")
+  revealedZones  Json     @default("[]") @map("revealed_zones")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([campaignId, playerId, mapLevelId])
+  @@index([campaignId, mapLevelId])
+  @@map("fog_states")
+}
+
 model Notification {
   id          String    @id @default(uuid())
   userId      String    @map("user_id")
