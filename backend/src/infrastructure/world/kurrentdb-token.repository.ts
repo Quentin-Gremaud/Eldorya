@@ -63,7 +63,7 @@ export class KurrentDbTokenRepository implements TokenRepository {
       const events = await this.kurrentDb.readStream(`token-${campaignId}`);
       return TokenAggregate.loadFromHistory(campaignId, events);
     } catch (error: unknown) {
-      if (error instanceof Error && error.message.includes('not found')) {
+      if (error instanceof Error && error.message.toLowerCase().replace(/\s/g, '').includes('notfound')) {
         return TokenAggregate.createNew(campaignId);
       }
       throw error;

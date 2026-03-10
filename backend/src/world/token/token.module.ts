@@ -4,6 +4,7 @@ import { PlaceTokenHandler } from './commands/place-token.handler.js';
 import { MoveTokenHandler } from './commands/move-token.handler.js';
 import { RemoveTokenHandler } from './commands/remove-token.handler.js';
 import { TOKEN_REPOSITORY } from './token.repository.js';
+import { KurrentDbTokenRepository } from '../../infrastructure/world/kurrentdb-token.repository.js';
 import { SystemClock, CLOCK } from '../../shared/clock.js';
 
 @Module({
@@ -12,6 +13,10 @@ import { SystemClock, CLOCK } from '../../shared/clock.js';
     PlaceTokenHandler,
     MoveTokenHandler,
     RemoveTokenHandler,
+    {
+      provide: TOKEN_REPOSITORY,
+      useClass: KurrentDbTokenRepository,
+    },
     { provide: CLOCK, useClass: SystemClock },
   ],
 })

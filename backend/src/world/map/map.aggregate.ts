@@ -26,6 +26,7 @@ export class MapAggregate {
   private campaignId = '';
   private levels: Map<string, MapLevelState> = new Map();
   private uncommittedEvents: MapEvent[] = [];
+  private _isNew = false;
 
   private constructor() {}
 
@@ -33,7 +34,12 @@ export class MapAggregate {
     const aggregate = new MapAggregate();
     CampaignId.fromString(campaignId);
     aggregate.campaignId = campaignId;
+    aggregate._isNew = true;
     return aggregate;
+  }
+
+  isNew(): boolean {
+    return this._isNew;
   }
 
   createLevel(

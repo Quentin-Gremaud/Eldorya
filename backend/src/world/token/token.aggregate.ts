@@ -27,6 +27,7 @@ export class TokenAggregate {
   private campaignId = '';
   private tokens: Map<string, TokenState> = new Map();
   private uncommittedEvents: TokenEvent[] = [];
+  private _isNew = false;
 
   private constructor() {}
 
@@ -34,7 +35,12 @@ export class TokenAggregate {
     const aggregate = new TokenAggregate();
     CampaignId.fromString(campaignId);
     aggregate.campaignId = campaignId;
+    aggregate._isNew = true;
     return aggregate;
+  }
+
+  isNew(): boolean {
+    return this._isNew;
   }
 
   placeToken(

@@ -32,7 +32,7 @@ describe('CreateMapLevelHandler', () => {
     );
   });
 
-  it('should load aggregate, create level, and save', async () => {
+  it('should use saveNew when aggregate is new (first level)', async () => {
     const command = new CreateMapLevelCommand(
       campaignId,
       mapLevelId,
@@ -43,7 +43,8 @@ describe('CreateMapLevelHandler', () => {
     await handler.execute(command);
 
     expect(mockRepository.load).toHaveBeenCalledWith(campaignId);
-    expect(mockRepository.save).toHaveBeenCalledTimes(1);
+    expect(mockRepository.saveNew).toHaveBeenCalledTimes(1);
+    expect(mockRepository.save).not.toHaveBeenCalled();
   });
 
   it('should emit MapLevelCreated event with correct data', async () => {
@@ -56,7 +57,7 @@ describe('CreateMapLevelHandler', () => {
 
     await handler.execute(command);
 
-    const [aggregate] = mockRepository.save.mock.calls[0];
+    const [aggregate] = mockRepository.saveNew.mock.calls[0];
     const events = aggregate.getUncommittedEvents();
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe('MapLevelCreated');
@@ -67,11 +68,21 @@ describe('CreateMapLevelHandler', () => {
     expect(events[0].depth).toBe(0);
   });
 
-  it('should create child level under existing parent', async () => {
+  it('should use save (not saveNew) when aggregate has existing levels', async () => {
     const parentId = '770e8400-e29b-41d4-a716-446655440000';
-    const existingMap = MapAggregate.createNew(campaignId);
-    existingMap.createLevel(parentId, 'World', null, mockClock);
-    existingMap.clearEvents();
+    const existingMap = MapAggregate.loadFromHistory(campaignId, [
+      {
+        type: 'MapLevelCreated',
+        data: {
+          campaignId,
+          mapLevelId: parentId,
+          name: 'World',
+          parentId: null,
+          depth: 0,
+          createdAt: '2026-03-08T12:00:00.000Z',
+        },
+      },
+    ]);
 
     mockRepository.load.mockResolvedValue(existingMap);
 
@@ -84,6 +95,8 @@ describe('CreateMapLevelHandler', () => {
 
     await handler.execute(command);
 
+    expect(mockRepository.save).toHaveBeenCalledTimes(1);
+    expect(mockRepository.saveNew).not.toHaveBeenCalled();
     const [aggregate] = mockRepository.save.mock.calls[0];
     const events = aggregate.getUncommittedEvents();
     expect(events).toHaveLength(1);

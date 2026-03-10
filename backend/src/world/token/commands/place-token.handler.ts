@@ -32,7 +32,11 @@ export class PlaceTokenHandler
       this.clock,
     );
 
-    await this.tokenRepository.save(aggregate);
+    if (aggregate.isNew()) {
+      await this.tokenRepository.saveNew(aggregate);
+    } else {
+      await this.tokenRepository.save(aggregate);
+    }
 
     this.logger.log(
       `TokenPlaced event persisted for token ${command.tokenId} in campaign ${command.campaignId}`,

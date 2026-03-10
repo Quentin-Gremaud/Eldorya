@@ -29,7 +29,7 @@ export class AssetStorageService {
     const endpoint = process.env.S3_ENDPOINT;
     this.s3Client = new S3Client({
       region: process.env.S3_REGION ?? 'auto',
-      ...(endpoint ? { endpoint } : {}),
+      ...(endpoint ? { endpoint, forcePathStyle: true } : {}),
       credentials: {
         accessKeyId: accessKey,
         secretAccessKey: secretKey,

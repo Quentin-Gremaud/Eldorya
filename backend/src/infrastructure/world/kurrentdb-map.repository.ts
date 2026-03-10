@@ -63,7 +63,7 @@ export class KurrentDbMapRepository implements MapRepository {
       const events = await this.kurrentDb.readStream(`map-${campaignId}`);
       return MapAggregate.loadFromHistory(campaignId, events);
     } catch (error: unknown) {
-      if (error instanceof Error && error.message.includes('not found')) {
+      if (error instanceof Error && error.message.toLowerCase().replace(/\s/g, '').includes('notfound')) {
         return MapAggregate.createNew(campaignId);
       }
       throw error;

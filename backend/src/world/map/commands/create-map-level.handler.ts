@@ -29,7 +29,11 @@ export class CreateMapLevelHandler
       this.clock,
     );
 
-    await this.mapRepository.save(map);
+    if (map.isNew()) {
+      await this.mapRepository.saveNew(map);
+    } else {
+      await this.mapRepository.save(map);
+    }
 
     this.logger.log(
       `MapLevelCreated event persisted for level ${command.mapLevelId} in campaign ${command.campaignId}`,
