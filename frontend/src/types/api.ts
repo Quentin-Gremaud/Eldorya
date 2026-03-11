@@ -278,6 +278,17 @@ export interface RemoveTokenPayload {
 
 // Fog of War types
 
+export interface RevealFogZonePayload {
+  fogZoneId: string;
+  playerId: string;
+  mapLevelId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  commandId: string;
+}
+
 export interface FogZone {
   id: string;
   mapLevelId: string;

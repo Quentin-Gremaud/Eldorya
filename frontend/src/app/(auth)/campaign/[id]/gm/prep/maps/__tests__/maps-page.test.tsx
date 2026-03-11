@@ -109,6 +109,24 @@ jest.mock("@/hooks/use-campaign-players", () => ({
   }),
 }));
 
+const mockRevealMutate = jest.fn();
+
+jest.mock("@/hooks/use-reveal-fog-zone", () => ({
+  useRevealFogZone: () => ({
+    mutate: mockRevealMutate,
+    isPending: false,
+  }),
+}));
+
+jest.mock("@/hooks/use-fog-state", () => ({
+  useFogState: () => ({
+    fogZones: [],
+    isLoading: false,
+    isError: false,
+    error: null,
+  }),
+}));
+
 jest.mock("react-konva", () => ({
   Stage: ({ children }: { children: React.ReactNode }) => <div data-testid="stage">{children}</div>,
   Layer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -116,6 +134,7 @@ jest.mock("react-konva", () => ({
   Circle: () => <div />,
   Text: () => <div />,
   Image: () => <div />,
+  Rect: () => <div />,
 }));
 
 function createWrapper() {
@@ -274,5 +293,52 @@ describe("GmPrepMapsPage", () => {
 
     const backButton = screen.getByLabelText("Go back");
     expect(backButton).toHaveAttribute("href", "/campaign/c1/gm/prep");
+  });
+
+  it("should render fog toolbar on maps page (GM mode)", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+
+    expect(screen.getByTestId("fog-reveal-button")).toBeInTheDocument();
+  });
+
+  it("should show fog player selector when fog tool activated", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+    fireEvent.click(screen.getByTestId("fog-reveal-button"));
+
+    expect(screen.getByTestId("fog-player-selector")).toBeInTheDocument();
+  });
+
+  it("should hide fog toolbar in preview mode", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+    expect(screen.getByTestId("fog-reveal-button")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /preview.*player.*view/i }));
+    expect(screen.queryByTestId("fog-reveal-button")).not.toBeInTheDocument();
+  });
+
+  it("should hide fog player selector when fog tool is not active", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+
+    expect(screen.queryByTestId("fog-player-selector")).not.toBeInTheDocument();
   });
 });

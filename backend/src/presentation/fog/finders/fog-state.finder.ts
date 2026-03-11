@@ -15,6 +15,30 @@ export interface FogZoneResult {
 export class FogStateFinder {
   constructor(private readonly prisma: PrismaService) {}
 
+  async checkGmAccess(
+    campaignId: string,
+    userId: string,
+  ): Promise<void> {
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: campaignId },
+      select: { gmUserId: true },
+    });
+
+    if (!campaign) throw new NotFoundException();
+    if (campaign.gmUserId !== userId) throw new ForbiddenException();
+  }
+
+  async checkPlayerInCampaign(
+    campaignId: string,
+    playerId: string,
+  ): Promise<void> {
+    const member = await this.prisma.campaignMember.findFirst({
+      where: { campaignId, userId: playerId, role: 'player' },
+    });
+
+    if (!member) throw new NotFoundException('Player not found in campaign');
+  }
+
   async checkPlayerOrGmAccess(
     campaignId: string,
     playerId: string,

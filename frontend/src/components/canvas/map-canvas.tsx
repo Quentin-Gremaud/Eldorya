@@ -4,9 +4,12 @@ import { useRef, useState, useCallback, useEffect } from "react";
 import { Stage } from "react-konva";
 import type Konva from "konva";
 import type { MapLevel, Token, FogZone } from "@/types/api";
+import type { FogTool } from "@/components/features/fog/fog-toolbar";
 import { MapBackgroundLayer } from "./map-background-layer";
 import { TokenLayer, type ViewMode } from "./token-layer";
 import { FogOverlayLayer } from "./fog-overlay-layer";
+import { FogPainter } from "@/components/features/fog/fog-painter";
+import { FogRevealIndicator } from "@/components/features/fog/fog-reveal-indicator";
 import { MapControls } from "./map-controls";
 
 const MIN_SCALE = 0.1;
@@ -20,6 +23,8 @@ interface MapCanvasProps {
   viewMode?: ViewMode;
   playerId?: string;
   fogZones?: FogZone[];
+  activeTool?: FogTool;
+  onFogPaint?: (zone: { x: number; y: number; width: number; height: number }) => void;
   onTokenPlace?: (
     tokenId: string,
     mapLevelId: string,
@@ -37,13 +42,17 @@ export function MapCanvas({
   tokens,
   interactive,
   viewMode = "gm",
+  playerId,
   fogZones,
+  activeTool = "select",
+  onFogPaint,
   onTokenPlace,
   onTokenMove,
   onTokenRemove,
 }: MapCanvasProps) {
   const isGmMode = viewMode === "gm";
-  const effectiveInteractive = interactive && isGmMode;
+  const isFogToolActive = activeTool === "fog-reveal";
+  const effectiveInteractive = interactive && isGmMode && !isFogToolActive;
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -241,16 +250,17 @@ export function MapCanvas({
     <div
       ref={containerRef}
       className="relative w-full h-full"
-      onDrop={isGmMode ? handleDrop : undefined}
-      onDragOver={isGmMode ? handleDragOver : undefined}
+      style={{ cursor: isFogToolActive ? "crosshair" : undefined }}
+      onDrop={isGmMode && !isFogToolActive ? handleDrop : undefined}
+      onDragOver={isGmMode && !isFogToolActive ? handleDragOver : undefined}
     >
       <Stage
         ref={stageRef}
         width={dimensions.width}
         height={dimensions.height}
-        draggable
+        draggable={!isFogToolActive}
         onWheel={handleWheel}
-        onClick={handleStageClick}
+        onClick={isFogToolActive ? undefined : handleStageClick}
       >
         <MapBackgroundLayer backgroundImageUrl={mapLevel.backgroundImageUrl} onImageLoad={handleImageLoad} />
         <TokenLayer
@@ -265,7 +275,17 @@ export function MapCanvas({
           fogZones={fogZones}
           stageWidth={dimensions.width}
           stageHeight={dimensions.height}
+          viewMode={viewMode}
         />
+        {isFogToolActive && onFogPaint && (
+          <FogPainter active={isFogToolActive} onFogPaint={onFogPaint} />
+        )}
+        {fogZones && fogZones.length > 0 && (
+          <FogRevealIndicator
+            fogZones={fogZones}
+            isTargetedView={viewMode === "preview" && !!playerId}
+          />
+        )}
       </Stage>
 
       <MapControls

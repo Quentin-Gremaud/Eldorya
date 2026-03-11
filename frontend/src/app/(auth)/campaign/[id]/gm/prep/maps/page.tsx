@@ -10,6 +10,8 @@ import { usePlaceToken } from "@/hooks/use-place-token";
 import { useMoveToken } from "@/hooks/use-move-token";
 import { useRemoveToken } from "@/hooks/use-remove-token";
 import { useCampaignPlayers } from "@/hooks/use-campaign-players";
+import { useRevealFogZone } from "@/hooks/use-reveal-fog-zone";
+import { useFogState } from "@/hooks/use-fog-state";
 import { MapHierarchyTree } from "@/components/features/maps/map-hierarchy-tree";
 import { MapBreadcrumb } from "@/components/features/maps/map-breadcrumb";
 import { CreateMapLevelDialog } from "@/components/features/maps/create-map-level-dialog";
@@ -17,6 +19,8 @@ import { ImportMapBackgroundButton } from "@/components/features/maps/import-map
 import { MapCanvas } from "@/components/canvas/map-canvas";
 import { TokenPalette } from "@/components/features/maps/token-palette";
 import { PlayerPreviewBar } from "@/components/features/maps/player-preview-bar";
+import { FogToolbar, type FogTool } from "@/components/features/fog/fog-toolbar";
+import { FogPlayerSelector } from "@/components/features/fog/fog-player-selector";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -44,6 +48,17 @@ export default function GmPrepMapsPage({
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
   const [previewPlayerId, setPreviewPlayerId] = useState<string | null>(null);
+  const [activeTool, setActiveTool] = useState<FogTool>("select");
+  const [fogTargetPlayerId, setFogTargetPlayerId] = useState<string | null>(
+    null
+  );
+
+  const revealFogZone = useRevealFogZone(campaignId);
+  const { fogZones } = useFogState(
+    campaignId,
+    isPreviewMode ? previewPlayerId : fogTargetPlayerId,
+    selectedMapLevelId
+  );
 
   const exitPreview = useCallback(() => {
     setIsPreviewMode(false);
@@ -118,6 +133,29 @@ export default function GmPrepMapsPage({
     if (!selectedMapLevelId) return;
     removeToken.mutate({ tokenId, mapLevelId: selectedMapLevelId });
   };
+
+  const handleToolChange = useCallback(
+    (tool: FogTool) => {
+      setActiveTool(tool);
+      if (tool === "fog-reveal" && !fogTargetPlayerId && players.length > 0) {
+        setFogTargetPlayerId(players[0].userId);
+      }
+    },
+    [fogTargetPlayerId, players]
+  );
+
+  const handleFogPaint = useCallback(
+    (zone: { x: number; y: number; width: number; height: number }) => {
+      if (!selectedMapLevelId || !fogTargetPlayerId) return;
+      revealFogZone.mutate({
+        fogZoneId: crypto.randomUUID(),
+        playerId: fogTargetPlayerId,
+        mapLevelId: selectedMapLevelId,
+        ...zone,
+      });
+    },
+    [selectedMapLevelId, fogTargetPlayerId, revealFogZone]
+  );
 
   const selectedLevel = mapLevels.find((l) => l.id === selectedMapLevelId);
 
@@ -213,6 +251,16 @@ export default function GmPrepMapsPage({
                 <div className="flex items-center gap-2">
                   {!isPreviewMode && (
                     <>
+                      <FogToolbar
+                        activeTool={activeTool}
+                        onToolChange={handleToolChange}
+                      />
+                      <FogPlayerSelector
+                        players={players}
+                        selectedPlayerId={fogTargetPlayerId}
+                        onPlayerChange={setFogTargetPlayerId}
+                        visible={activeTool === "fog-reveal"}
+                      />
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
@@ -271,6 +319,9 @@ export default function GmPrepMapsPage({
                     interactive={true}
                     viewMode={isPreviewMode ? "preview" : "gm"}
                     playerId={isPreviewMode ? previewPlayerId ?? undefined : undefined}
+                    fogZones={fogZones}
+                    activeTool={isPreviewMode ? "select" : activeTool}
+                    onFogPaint={handleFogPaint}
                     onTokenPlace={handleTokenPlace}
                     onTokenMove={handleTokenMove}
                     onTokenRemove={handleTokenRemove}
