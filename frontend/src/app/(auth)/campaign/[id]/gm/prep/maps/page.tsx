@@ -2,6 +2,7 @@
 
 import { use, useState, useEffect, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { useMapLevels } from "@/hooks/use-map-levels";
 import { useCreateMapLevel } from "@/hooks/use-create-map-level";
 import { useRenameMapLevel } from "@/hooks/use-rename-map-level";
@@ -12,6 +13,8 @@ import { useRemoveToken } from "@/hooks/use-remove-token";
 import { useCampaignPlayers } from "@/hooks/use-campaign-players";
 import { useRevealFogZone } from "@/hooks/use-reveal-fog-zone";
 import { useRevealFogZoneToAll } from "@/hooks/use-reveal-fog-zone-to-all";
+import { useHideFogZone } from "@/hooks/use-hide-fog-zone";
+import { useHideFogZoneToAll } from "@/hooks/use-hide-fog-zone-to-all";
 import { useFogState } from "@/hooks/use-fog-state";
 import { MapHierarchyTree } from "@/components/features/maps/map-hierarchy-tree";
 import { MapBreadcrumb } from "@/components/features/maps/map-breadcrumb";
@@ -56,6 +59,8 @@ export default function GmPrepMapsPage({
 
   const revealFogZone = useRevealFogZone(campaignId);
   const revealFogZoneToAll = useRevealFogZoneToAll(campaignId);
+  const hideFogZone = useHideFogZone(campaignId);
+  const hideFogZoneToAll = useHideFogZoneToAll(campaignId);
   const { fogZones } = useFogState(
     campaignId,
     isPreviewMode ? previewPlayerId : fogTargetPlayerId,
@@ -140,7 +145,7 @@ export default function GmPrepMapsPage({
     (tool: FogTool) => {
       setActiveTool(tool);
       if (
-        (tool === "fog-reveal" || tool === "fog-reveal-all") &&
+        (tool === "fog-reveal" || tool === "fog-reveal-all" || tool === "fog-hide" || tool === "fog-hide-all") &&
         !fogTargetPlayerId &&
         players.length > 0
       ) {
@@ -161,7 +166,7 @@ export default function GmPrepMapsPage({
           previewPlayerId: fogTargetPlayerId,
           ...zone,
         });
-      } else {
+      } else if (activeTool === "fog-reveal") {
         if (!fogTargetPlayerId) return;
         revealFogZone.mutate({
           fogZoneId: crypto.randomUUID(),
@@ -169,9 +174,52 @@ export default function GmPrepMapsPage({
           mapLevelId: selectedMapLevelId,
           ...zone,
         });
+      } else if (activeTool === "fog-hide") {
+        if (!fogTargetPlayerId) return;
+        const overlapping = fogZones.filter(
+          (fz) =>
+            fz.x < zone.x + zone.width &&
+            fz.x + fz.width > zone.x &&
+            fz.y < zone.y + zone.height &&
+            fz.y + fz.height > zone.y
+        );
+        if (overlapping.length === 0) return;
+        const batch = overlapping.length > 1;
+        for (const fz of overlapping) {
+          hideFogZone.mutate({
+            fogZoneId: fz.id,
+            playerId: fogTargetPlayerId,
+            mapLevelId: selectedMapLevelId,
+            silent: batch,
+          });
+        }
+        if (batch) {
+          toast.success(`${overlapping.length} fog zones hidden`);
+        }
+      } else if (activeTool === "fog-hide-all") {
+        const overlapping = fogZones.filter(
+          (fz) =>
+            fz.x < zone.x + zone.width &&
+            fz.x + fz.width > zone.x &&
+            fz.y < zone.y + zone.height &&
+            fz.y + fz.height > zone.y
+        );
+        if (overlapping.length === 0) return;
+        const batch = overlapping.length > 1;
+        for (const fz of overlapping) {
+          hideFogZoneToAll.mutate({
+            fogZoneId: fz.id,
+            mapLevelId: selectedMapLevelId,
+            previewPlayerId: fogTargetPlayerId,
+            silent: batch,
+          });
+        }
+        if (batch) {
+          toast.success(`${overlapping.length} fog zones hidden for all players`);
+        }
       }
     },
-    [selectedMapLevelId, fogTargetPlayerId, activeTool, revealFogZone, revealFogZoneToAll]
+    [selectedMapLevelId, fogTargetPlayerId, activeTool, revealFogZone, revealFogZoneToAll, hideFogZone, hideFogZoneToAll, fogZones]
   );
 
   const selectedLevel = mapLevels.find((l) => l.id === selectedMapLevelId);
@@ -276,11 +324,16 @@ export default function GmPrepMapsPage({
                         players={players}
                         selectedPlayerId={fogTargetPlayerId}
                         onPlayerChange={setFogTargetPlayerId}
-                        visible={activeTool === "fog-reveal"}
+                        visible={activeTool === "fog-reveal" || activeTool === "fog-hide"}
                       />
                       {activeTool === "fog-reveal-all" && (
                         <span className="text-xs text-muted-foreground whitespace-nowrap" data-testid="fog-reveal-all-label">
                           Revealing to all players
+                        </span>
+                      )}
+                      {activeTool === "fog-hide-all" && (
+                        <span className="text-xs text-muted-foreground whitespace-nowrap" data-testid="fog-hide-all-label">
+                          Hiding from all players
                         </span>
                       )}
                       <Tooltip>

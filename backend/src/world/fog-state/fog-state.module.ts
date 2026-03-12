@@ -4,6 +4,7 @@ import { InitializeFogStateHandler } from './commands/initialize-fog-state.handl
 import { RevealFogZoneHandler } from './commands/reveal-fog-zone.handler.js';
 import { RevealFogZoneToAllHandler } from './commands/reveal-fog-zone-to-all.handler.js';
 import { HideFogZoneHandler } from './commands/hide-fog-zone.handler.js';
+import { HideFogZoneToAllHandler } from './commands/hide-fog-zone-to-all.handler.js';
 import { KurrentDbFogStateRepository } from '../../infrastructure/world/kurrentdb-fog-state.repository.js';
 import { FOG_STATE_REPOSITORY } from './fog-state.repository.js';
 import { CAMPAIGN_PLAYER_PROVIDER } from './campaign-player.provider.js';
@@ -18,6 +19,7 @@ import { FogPresentationModule } from '../../presentation/fog/fog-presentation.m
     RevealFogZoneHandler,
     RevealFogZoneToAllHandler,
     HideFogZoneHandler,
+    HideFogZoneToAllHandler,
     {
       provide: FOG_STATE_REPOSITORY,
       useClass: KurrentDbFogStateRepository,

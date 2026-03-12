@@ -10,6 +10,7 @@ import { TokenLayer, type ViewMode } from "./token-layer";
 import { FogOverlayLayer } from "./fog-overlay-layer";
 import { FogPainter } from "@/components/features/fog/fog-painter";
 import { FogRevealIndicator } from "@/components/features/fog/fog-reveal-indicator";
+import { FogHideIndicator } from "@/components/features/fog/fog-hide-indicator";
 import { MapControls } from "./map-controls";
 
 const MIN_SCALE = 0.1;
@@ -51,7 +52,7 @@ export function MapCanvas({
   onTokenRemove,
 }: MapCanvasProps) {
   const isGmMode = viewMode === "gm";
-  const isFogToolActive = activeTool === "fog-reveal" || activeTool === "fog-reveal-all";
+  const isFogToolActive = activeTool === "fog-reveal" || activeTool === "fog-reveal-all" || activeTool === "fog-hide" || activeTool === "fog-hide-all";
   const effectiveInteractive = interactive && isGmMode && !isFogToolActive;
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -282,6 +283,12 @@ export function MapCanvas({
         )}
         {fogZones && fogZones.length > 0 && (
           <FogRevealIndicator
+            fogZones={fogZones}
+            isTargetedView={viewMode === "preview" && !!playerId}
+          />
+        )}
+        {fogZones && (
+          <FogHideIndicator
             fogZones={fogZones}
             isTargetedView={viewMode === "preview" && !!playerId}
           />

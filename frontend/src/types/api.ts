@@ -299,6 +299,17 @@ export interface RevealFogZoneToAllPayload {
   commandId: string;
 }
 
+export interface HideFogZonePayload {
+  fogZoneId: string;
+  playerId: string;
+  commandId: string;
+}
+
+export interface HideFogZoneToAllPayload {
+  fogZoneId: string;
+  commandId: string;
+}
+
 export interface FogZone {
   id: string;
   mapLevelId: string;

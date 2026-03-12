@@ -161,4 +161,112 @@ describe("FogToolbar", () => {
     expect(screen.getByTestId("fog-reveal-all-button").getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByTestId("fog-reveal-button").getAttribute("aria-pressed")).toBe("false");
   });
+
+  // Hide tool tests
+
+  it("should render the fog hide button", () => {
+    render(<FogToolbar activeTool="select" onToolChange={jest.fn()} />);
+
+    expect(screen.getByTestId("fog-hide-button")).toBeInTheDocument();
+    expect(screen.getByText("Fog Hide")).toBeInTheDocument();
+  });
+
+  it("should render the fog hide all button", () => {
+    render(<FogToolbar activeTool="select" onToolChange={jest.fn()} />);
+
+    expect(screen.getByTestId("fog-hide-all-button")).toBeInTheDocument();
+    expect(screen.getByText("Hide from All")).toBeInTheDocument();
+  });
+
+  it("should call onToolChange with fog-hide when clicked", () => {
+    const onToolChange = jest.fn();
+    render(<FogToolbar activeTool="select" onToolChange={onToolChange} />);
+
+    fireEvent.click(screen.getByTestId("fog-hide-button"));
+
+    expect(onToolChange).toHaveBeenCalledWith("fog-hide");
+  });
+
+  it("should call onToolChange with select when fog-hide clicked while active", () => {
+    const onToolChange = jest.fn();
+    render(<FogToolbar activeTool="fog-hide" onToolChange={onToolChange} />);
+
+    fireEvent.click(screen.getByTestId("fog-hide-button"));
+
+    expect(onToolChange).toHaveBeenCalledWith("select");
+  });
+
+  it("should call onToolChange with fog-hide-all when Hide from All button clicked", () => {
+    const onToolChange = jest.fn();
+    render(<FogToolbar activeTool="select" onToolChange={onToolChange} />);
+
+    fireEvent.click(screen.getByTestId("fog-hide-all-button"));
+
+    expect(onToolChange).toHaveBeenCalledWith("fog-hide-all");
+  });
+
+  it("should toggle fog-hide on keyboard shortcut H", () => {
+    const onToolChange = jest.fn();
+    render(<FogToolbar activeTool="select" onToolChange={onToolChange} />);
+
+    fireEvent.keyDown(document, { key: "h" });
+
+    expect(onToolChange).toHaveBeenCalledWith("fog-hide");
+  });
+
+  it("should toggle back to select on keyboard shortcut H when fog-hide is active", () => {
+    const onToolChange = jest.fn();
+    render(<FogToolbar activeTool="fog-hide" onToolChange={onToolChange} />);
+
+    fireEvent.keyDown(document, { key: "h" });
+
+    expect(onToolChange).toHaveBeenCalledWith("select");
+  });
+
+  it("should toggle fog-hide-all on keyboard shortcut J", () => {
+    const onToolChange = jest.fn();
+    render(<FogToolbar activeTool="select" onToolChange={onToolChange} />);
+
+    fireEvent.keyDown(document, { key: "j" });
+
+    expect(onToolChange).toHaveBeenCalledWith("fog-hide-all");
+  });
+
+  it("should toggle back to select on keyboard shortcut J when fog-hide-all is active", () => {
+    const onToolChange = jest.fn();
+    render(<FogToolbar activeTool="fog-hide-all" onToolChange={onToolChange} />);
+
+    fireEvent.keyDown(document, { key: "j" });
+
+    expect(onToolChange).toHaveBeenCalledWith("select");
+  });
+
+  it("should show active visual feedback when fog-hide is active", () => {
+    render(<FogToolbar activeTool="fog-hide" onToolChange={jest.fn()} />);
+
+    const button = screen.getByTestId("fog-hide-button");
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("should show active visual feedback when fog-hide-all is active", () => {
+    render(<FogToolbar activeTool="fog-hide-all" onToolChange={jest.fn()} />);
+
+    const button = screen.getByTestId("fog-hide-all-button");
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("should not toggle on H when inside an input element", () => {
+    const onToolChange = jest.fn();
+    render(
+      <>
+        <FogToolbar activeTool="select" onToolChange={onToolChange} />
+        <input data-testid="text-input" />
+      </>
+    );
+
+    const input = screen.getByTestId("text-input");
+    fireEvent.keyDown(input, { key: "h" });
+
+    expect(onToolChange).not.toHaveBeenCalled();
+  });
 });

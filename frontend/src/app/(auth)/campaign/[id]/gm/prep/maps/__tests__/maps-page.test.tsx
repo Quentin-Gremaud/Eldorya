@@ -12,6 +12,21 @@ class MockResizeObserver {
 }
 global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
+// Mock matchMedia (needed by FogHideIndicator)
+Object.defineProperty(window, "matchMedia", {
+  writable: true,
+  value: jest.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: jest.fn(),
+    removeListener: jest.fn(),
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
+    dispatchEvent: jest.fn(),
+  })),
+});
+
 jest.mock("react", () => {
   const actual = jest.requireActual("react");
   return {
@@ -111,6 +126,8 @@ jest.mock("@/hooks/use-campaign-players", () => ({
 
 const mockRevealMutate = jest.fn();
 const mockRevealAllMutate = jest.fn();
+const mockHideMutate = jest.fn();
+const mockHideAllMutate = jest.fn();
 
 jest.mock("@/hooks/use-reveal-fog-zone", () => ({
   useRevealFogZone: () => ({
@@ -126,6 +143,20 @@ jest.mock("@/hooks/use-reveal-fog-zone-to-all", () => ({
   }),
 }));
 
+jest.mock("@/hooks/use-hide-fog-zone", () => ({
+  useHideFogZone: () => ({
+    mutate: mockHideMutate,
+    isPending: false,
+  }),
+}));
+
+jest.mock("@/hooks/use-hide-fog-zone-to-all", () => ({
+  useHideFogZoneToAll: () => ({
+    mutate: mockHideAllMutate,
+    isPending: false,
+  }),
+}));
+
 jest.mock("@/hooks/use-fog-state", () => ({
   useFogState: () => ({
     fogZones: [],
@@ -133,6 +164,13 @@ jest.mock("@/hooks/use-fog-state", () => ({
     isError: false,
     error: null,
   }),
+}));
+
+jest.mock("sonner", () => ({
+  toast: {
+    success: jest.fn(),
+    error: jest.fn(),
+  },
 }));
 
 jest.mock("react-konva", () => ({
@@ -408,5 +446,138 @@ describe("GmPrepMapsPage", () => {
     fireEvent.click(screen.getByText("World"));
 
     expect(screen.queryByTestId("fog-reveal-all-label")).not.toBeInTheDocument();
+  });
+
+  // Hide tool integration tests
+
+  it("should render fog hide button on maps page", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+
+    expect(screen.getByTestId("fog-hide-button")).toBeInTheDocument();
+  });
+
+  it("should render fog hide all button on maps page", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+
+    expect(screen.getByTestId("fog-hide-all-button")).toBeInTheDocument();
+  });
+
+  it("should show fog player selector when fog-hide tool is active", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+    fireEvent.click(screen.getByTestId("fog-hide-button"));
+
+    expect(screen.getByTestId("fog-player-selector")).toBeInTheDocument();
+  });
+
+  it("should hide fog player selector when fog-hide-all tool is active", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+    fireEvent.click(screen.getByTestId("fog-hide-all-button"));
+
+    expect(screen.queryByTestId("fog-player-selector")).not.toBeInTheDocument();
+  });
+
+  it("should show 'Hiding from all players' label when fog-hide-all is active", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+    fireEvent.click(screen.getByTestId("fog-hide-all-button"));
+
+    expect(screen.getByTestId("fog-hide-all-label")).toBeInTheDocument();
+    expect(screen.getByText("Hiding from all players")).toBeInTheDocument();
+  });
+
+  it("should not show hide-all label when fog-hide-all is inactive", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+
+    expect(screen.queryByTestId("fog-hide-all-label")).not.toBeInTheDocument();
+  });
+
+  it("should switch between hide and hide-all tools correctly", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+
+    // Activate targeted hide
+    fireEvent.click(screen.getByTestId("fog-hide-button"));
+    expect(screen.getByTestId("fog-player-selector")).toBeInTheDocument();
+    expect(screen.queryByTestId("fog-hide-all-label")).not.toBeInTheDocument();
+
+    // Switch to global hide
+    fireEvent.click(screen.getByTestId("fog-hide-all-button"));
+    expect(screen.queryByTestId("fog-player-selector")).not.toBeInTheDocument();
+    expect(screen.getByTestId("fog-hide-all-label")).toBeInTheDocument();
+
+    // Switch back to targeted hide
+    fireEvent.click(screen.getByTestId("fog-hide-button"));
+    expect(screen.getByTestId("fog-player-selector")).toBeInTheDocument();
+    expect(screen.queryByTestId("fog-hide-all-label")).not.toBeInTheDocument();
+  });
+
+  it("should switch between reveal and hide tools correctly", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+
+    // Activate reveal
+    fireEvent.click(screen.getByTestId("fog-reveal-button"));
+    expect(screen.getByTestId("fog-player-selector")).toBeInTheDocument();
+
+    // Switch to hide
+    fireEvent.click(screen.getByTestId("fog-hide-button"));
+    expect(screen.getByTestId("fog-player-selector")).toBeInTheDocument();
+
+    // Switch to hide-all
+    fireEvent.click(screen.getByTestId("fog-hide-all-button"));
+    expect(screen.queryByTestId("fog-player-selector")).not.toBeInTheDocument();
+    expect(screen.getByTestId("fog-hide-all-label")).toBeInTheDocument();
+  });
+
+  it("should hide fog hide buttons in preview mode", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+    expect(screen.getByTestId("fog-hide-button")).toBeInTheDocument();
+    expect(screen.getByTestId("fog-hide-all-button")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /preview.*player.*view/i }));
+    expect(screen.queryByTestId("fog-hide-button")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("fog-hide-all-button")).not.toBeInTheDocument();
   });
 });
