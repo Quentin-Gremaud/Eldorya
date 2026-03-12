@@ -51,7 +51,7 @@ export function MapCanvas({
   onTokenRemove,
 }: MapCanvasProps) {
   const isGmMode = viewMode === "gm";
-  const isFogToolActive = activeTool === "fog-reveal";
+  const isFogToolActive = activeTool === "fog-reveal" || activeTool === "fog-reveal-all";
   const effectiveInteractive = interactive && isGmMode && !isFogToolActive;
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);

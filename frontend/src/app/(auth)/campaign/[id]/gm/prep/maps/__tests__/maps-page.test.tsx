@@ -110,10 +110,18 @@ jest.mock("@/hooks/use-campaign-players", () => ({
 }));
 
 const mockRevealMutate = jest.fn();
+const mockRevealAllMutate = jest.fn();
 
 jest.mock("@/hooks/use-reveal-fog-zone", () => ({
   useRevealFogZone: () => ({
     mutate: mockRevealMutate,
+    isPending: false,
+  }),
+}));
+
+jest.mock("@/hooks/use-reveal-fog-zone-to-all", () => ({
+  useRevealFogZoneToAll: () => ({
+    mutate: mockRevealAllMutate,
     isPending: false,
   }),
 }));
@@ -340,5 +348,65 @@ describe("GmPrepMapsPage", () => {
     fireEvent.click(screen.getByText("World"));
 
     expect(screen.queryByTestId("fog-player-selector")).not.toBeInTheDocument();
+  });
+
+  it("should render Reveal to All button on maps page", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+
+    expect(screen.getByTestId("fog-reveal-all-button")).toBeInTheDocument();
+  });
+
+  it("should hide fog player selector when Reveal to All is active", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+    fireEvent.click(screen.getByTestId("fog-reveal-all-button"));
+
+    expect(screen.queryByTestId("fog-player-selector")).not.toBeInTheDocument();
+    expect(screen.getByTestId("fog-reveal-all-label")).toBeInTheDocument();
+    expect(screen.getByText("Revealing to all players")).toBeInTheDocument();
+  });
+
+  it("should switch between targeted and global reveal correctly", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+
+    // Activate targeted reveal
+    fireEvent.click(screen.getByTestId("fog-reveal-button"));
+    expect(screen.getByTestId("fog-player-selector")).toBeInTheDocument();
+    expect(screen.queryByTestId("fog-reveal-all-label")).not.toBeInTheDocument();
+
+    // Switch to global reveal
+    fireEvent.click(screen.getByTestId("fog-reveal-all-button"));
+    expect(screen.queryByTestId("fog-player-selector")).not.toBeInTheDocument();
+    expect(screen.getByTestId("fog-reveal-all-label")).toBeInTheDocument();
+
+    // Switch back to targeted reveal
+    fireEvent.click(screen.getByTestId("fog-reveal-button"));
+    expect(screen.getByTestId("fog-player-selector")).toBeInTheDocument();
+    expect(screen.queryByTestId("fog-reveal-all-label")).not.toBeInTheDocument();
+  });
+
+  it("should not show Reveal to All label when fog-reveal-all is inactive", () => {
+    render(
+      <GmPrepMapsPage params={Promise.resolve({ id: "c1" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    fireEvent.click(screen.getByText("World"));
+
+    expect(screen.queryByTestId("fog-reveal-all-label")).not.toBeInTheDocument();
   });
 });

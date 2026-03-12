@@ -55,6 +55,15 @@ export class FogStateFinder {
     if (campaign.gmUserId !== userId) throw new ForbiddenException();
   }
 
+  async getPlayerIdsForCampaign(campaignId: string): Promise<string[]> {
+    const members = await this.prisma.campaignMember.findMany({
+      where: { campaignId, role: 'player' },
+      select: { userId: true },
+    });
+
+    return members.map((m) => m.userId);
+  }
+
   async findRevealedZones(
     campaignId: string,
     mapLevelId: string,
