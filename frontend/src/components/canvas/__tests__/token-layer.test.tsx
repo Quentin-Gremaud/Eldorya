@@ -180,6 +180,62 @@ describe("TokenLayer", () => {
       expect(getAllByTestId("token-group")).toHaveLength(2);
     });
 
+    it("should show token on zone boundary (center on edge — inclusive)", () => {
+      // token-1 at (100, 200), zone edge at x=100 (50+50 would be edge case)
+      const edgeZone: FogZone = {
+        id: "fz-edge",
+        mapLevelId: "level-1",
+        playerId: "p1",
+        x: 100, // token-1.x === zone.x (left edge)
+        y: 200, // token-1.y === zone.y (top edge)
+        width: 10,
+        height: 10,
+        revealed: true,
+        createdAt: "2026-03-10",
+      };
+
+      const { getAllByTestId } = render(
+        <TokenLayer
+          tokens={mockTokens}
+          interactive={false}
+          viewMode="player"
+          fogZones={[edgeZone]}
+        />
+      );
+
+      // token-1 at (100,200) is on the edge of zone (100,200)-(110,210) → visible (inclusive >=, <=)
+      const labels = getAllByTestId("token-label");
+      expect(labels).toHaveLength(1);
+      expect(labels[0].textContent).toBe("Warrior");
+    });
+
+    it("should hide token when zone is removed (simulating WebSocket hide)", () => {
+      const { getAllByTestId, queryAllByTestId, rerender } = render(
+        <TokenLayer
+          tokens={mockTokens}
+          interactive={false}
+          viewMode="player"
+          fogZones={[revealedZone]}
+        />
+      );
+
+      // token-1 visible, token-2 hidden
+      expect(getAllByTestId("token-group")).toHaveLength(1);
+
+      // Zone gets hidden (removed from revealed list) — simulates WebSocket FogZoneHidden
+      rerender(
+        <TokenLayer
+          tokens={mockTokens}
+          interactive={false}
+          viewMode="player"
+          fogZones={[{ ...revealedZone, revealed: false }]}
+        />
+      );
+
+      // No tokens visible now
+      expect(queryAllByTestId("token-group")).toHaveLength(0);
+    });
+
     it("should not filter tokens in gm mode even with fogZones", () => {
       const { getAllByTestId } = render(
         <TokenLayer

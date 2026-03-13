@@ -75,6 +75,44 @@ jest.mock("../fog-overlay-layer", () => ({
   ),
 }));
 
+jest.mock("@/components/features/fog/fog-reveal-indicator", () => ({
+  FogRevealIndicator: ({
+    fogZones,
+    isTargetedView,
+    viewMode,
+  }: {
+    fogZones: unknown[];
+    isTargetedView: boolean;
+    viewMode?: string;
+  }) => (
+    <div
+      data-testid="fog-reveal-indicator"
+      data-fog-count={fogZones.length}
+      data-is-targeted-view={isTargetedView}
+      data-view-mode={viewMode ?? ""}
+    />
+  ),
+}));
+
+jest.mock("@/components/features/fog/fog-hide-indicator", () => ({
+  FogHideIndicator: ({
+    fogZones,
+    isTargetedView,
+    viewMode,
+  }: {
+    fogZones: unknown[];
+    isTargetedView: boolean;
+    viewMode?: string;
+  }) => (
+    <div
+      data-testid="fog-hide-indicator"
+      data-fog-count={fogZones?.length ?? 0}
+      data-is-targeted-view={isTargetedView}
+      data-view-mode={viewMode ?? ""}
+    />
+  ),
+}));
+
 jest.mock("../map-controls", () => ({
   MapControls: ({
     onZoomIn,
@@ -317,6 +355,51 @@ describe("MapCanvas", () => {
     );
 
     expect(getByTestId("background-layer").getAttribute("data-has-onimageload")).toBe("true");
+  });
+
+  it("should pass viewMode to FogRevealIndicator and FogHideIndicator in player mode", () => {
+    const fogZones = [
+      { id: "fz-1", mapLevelId: "l1", playerId: "p1", x: 0, y: 0, width: 100, height: 100, revealed: true, createdAt: "2026-03-10" },
+    ];
+
+    const { getByTestId } = render(
+      <MapCanvas
+        mapLevel={mockMapLevel}
+        tokens={mockTokens}
+        interactive={false}
+        viewMode="player"
+        fogZones={fogZones}
+      />
+    );
+
+    const revealIndicator = getByTestId("fog-reveal-indicator");
+    expect(revealIndicator.getAttribute("data-view-mode")).toBe("player");
+    expect(revealIndicator.getAttribute("data-is-targeted-view")).toBe("false");
+
+    const hideIndicator = getByTestId("fog-hide-indicator");
+    expect(hideIndicator.getAttribute("data-view-mode")).toBe("player");
+    expect(hideIndicator.getAttribute("data-is-targeted-view")).toBe("false");
+  });
+
+  it("should set isTargetedView for preview mode with playerId", () => {
+    const fogZones = [
+      { id: "fz-1", mapLevelId: "l1", playerId: "p1", x: 0, y: 0, width: 100, height: 100, revealed: true, createdAt: "2026-03-10" },
+    ];
+
+    const { getByTestId } = render(
+      <MapCanvas
+        mapLevel={mockMapLevel}
+        tokens={mockTokens}
+        interactive={false}
+        viewMode="preview"
+        playerId="player-1"
+        fogZones={fogZones}
+      />
+    );
+
+    const revealIndicator = getByTestId("fog-reveal-indicator");
+    expect(revealIndicator.getAttribute("data-view-mode")).toBe("preview");
+    expect(revealIndicator.getAttribute("data-is-targeted-view")).toBe("true");
   });
 
   it("should render FogOverlayLayer with zero fog when no fogZones", () => {

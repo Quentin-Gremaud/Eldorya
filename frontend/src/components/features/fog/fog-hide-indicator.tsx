@@ -1,27 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Rect } from "react-konva";
 import type Konva from "konva";
 import type { FogZone } from "@/types/api";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 
 const HIDE_ANIMATION_DURATION_MS = 1000;
-
-function subscribeToPrefersReducedMotion(callback: () => void) {
-  if (typeof window === "undefined") return () => {};
-  const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
-  mql.addEventListener("change", callback);
-  return () => mql.removeEventListener("change", callback);
-}
-
-function getPrefersReducedMotion() {
-  if (typeof window === "undefined") return false;
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-}
-
-function getPrefersReducedMotionServer() {
-  return false;
-}
 
 interface RemovedZone {
   id: string;
@@ -34,6 +19,7 @@ interface RemovedZone {
 interface FogHideIndicatorProps {
   fogZones: FogZone[];
   isTargetedView: boolean;
+  viewMode?: "gm" | "player" | "preview";
 }
 
 function FadeRect({ zone }: { zone: RemovedZone }) {
@@ -70,14 +56,14 @@ function FadeRect({ zone }: { zone: RemovedZone }) {
 export function FogHideIndicator({
   fogZones,
   isTargetedView,
+  viewMode,
 }: FogHideIndicatorProps) {
   const [hiddenZones, setHiddenZones] = useState<RemovedZone[]>([]);
   const previousZonesRef = useRef<Map<string, FogZone>>(new Map());
-  const prefersReducedMotion = useSyncExternalStore(
-    subscribeToPrefersReducedMotion,
-    getPrefersReducedMotion,
-    getPrefersReducedMotionServer,
-  );
+  const timersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const prefersReducedMotion = usePrefersReducedMotion();
+
+  const shouldAnimate = viewMode === "player" || isTargetedView;
 
   useEffect(() => {
     const currentIds = new Set(fogZones.map((z) => z.id));
@@ -98,7 +84,7 @@ export function FogHideIndicator({
 
     previousZonesRef.current = new Map(fogZones.map((z) => [z.id, z]));
 
-    if (removed.length === 0) return;
+    if (removed.length === 0 || !shouldAnimate) return;
 
     if (prefersReducedMotion) {
       return;
@@ -106,15 +92,27 @@ export function FogHideIndicator({
 
     setHiddenZones((prev) => [...prev, ...removed]);
 
-    const removedIds = new Set(removed.map((r) => r.id));
-    const timer = setTimeout(() => {
-      setHiddenZones((prev) => prev.filter((z) => !removedIds.has(z.id)));
-    }, HIDE_ANIMATION_DURATION_MS);
+    for (const zone of removed) {
+      const existing = timersRef.current.get(zone.id);
+      if (existing) clearTimeout(existing);
 
-    return () => clearTimeout(timer);
-  }, [fogZones, prefersReducedMotion]);
+      const timer = setTimeout(() => {
+        setHiddenZones((prev) => prev.filter((z) => z.id !== zone.id));
+        timersRef.current.delete(zone.id);
+      }, HIDE_ANIMATION_DURATION_MS);
+      timersRef.current.set(zone.id, timer);
+    }
+  }, [fogZones, prefersReducedMotion, shouldAnimate]);
 
-  if (!isTargetedView) return null;
+  useEffect(() => {
+    return () => {
+      for (const timer of timersRef.current.values()) {
+        clearTimeout(timer);
+      }
+    };
+  }, []);
+
+  if (!shouldAnimate) return null;
 
   return (
     <>

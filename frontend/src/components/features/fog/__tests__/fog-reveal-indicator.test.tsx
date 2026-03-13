@@ -2,20 +2,10 @@ import { render, screen, act } from "@testing-library/react";
 import { FogRevealIndicator } from "../fog-reveal-indicator";
 import type { FogZone } from "@/types/api";
 
-// Mock window.matchMedia
-Object.defineProperty(window, "matchMedia", {
-  writable: true,
-  value: jest.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: jest.fn(),
-    removeListener: jest.fn(),
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    dispatchEvent: jest.fn(),
-  })),
-});
+// Mock usePrefersReducedMotion hook
+jest.mock("@/hooks/use-prefers-reduced-motion", () => ({
+  usePrefersReducedMotion: jest.fn(() => false),
+}));
 
 // Mock react-konva
 jest.mock("react-konva", () => ({
@@ -52,12 +42,54 @@ describe("FogRevealIndicator", () => {
     jest.useRealTimers();
   });
 
-  it("should not render when isTargetedView is false", () => {
+  it("should not render when isTargetedView is false and no viewMode", () => {
     const { container } = render(
       <FogRevealIndicator fogZones={[baseFogZone]} isTargetedView={false} />
     );
 
     expect(container.innerHTML).toBe("");
+  });
+
+  it("should not animate in gm viewMode", () => {
+    const { rerender } = render(
+      <FogRevealIndicator fogZones={[]} isTargetedView={false} viewMode="gm" />
+    );
+
+    rerender(
+      <FogRevealIndicator fogZones={[baseFogZone]} isTargetedView={false} viewMode="gm" />
+    );
+
+    expect(
+      screen.queryByTestId(`fog-reveal-glow-${baseFogZone.id}`)
+    ).not.toBeInTheDocument();
+  });
+
+  it("should animate in player viewMode", () => {
+    const { rerender } = render(
+      <FogRevealIndicator fogZones={[]} isTargetedView={false} viewMode="player" />
+    );
+
+    rerender(
+      <FogRevealIndicator fogZones={[baseFogZone]} isTargetedView={false} viewMode="player" />
+    );
+
+    expect(
+      screen.getByTestId(`fog-reveal-glow-${baseFogZone.id}`)
+    ).toBeInTheDocument();
+  });
+
+  it("should animate in preview viewMode with isTargetedView", () => {
+    const { rerender } = render(
+      <FogRevealIndicator fogZones={[]} isTargetedView={true} viewMode="preview" />
+    );
+
+    rerender(
+      <FogRevealIndicator fogZones={[baseFogZone]} isTargetedView={true} viewMode="preview" />
+    );
+
+    expect(
+      screen.getByTestId(`fog-reveal-glow-${baseFogZone.id}`)
+    ).toBeInTheDocument();
   });
 
   it("should not render glow when no new zones are added", () => {
@@ -153,5 +185,50 @@ describe("FogRevealIndicator", () => {
     expect(
       screen.getByTestId(`fog-reveal-glow-${zone2.id}`)
     ).toBeInTheDocument();
+  });
+
+  it("should clear all glow rects when zones are added in rapid succession", () => {
+    const zone2: FogZone = { ...baseFogZone, id: "zone-2", x: 50 };
+
+    const { rerender } = render(
+      <FogRevealIndicator fogZones={[]} isTargetedView={true} />
+    );
+
+    // Add zone-1
+    rerender(
+      <FogRevealIndicator fogZones={[baseFogZone]} isTargetedView={true} />
+    );
+
+    expect(
+      screen.getByTestId(`fog-reveal-glow-${baseFogZone.id}`)
+    ).toBeInTheDocument();
+
+    // Rapidly add zone-2 before zone-1's timer fires (within 2s)
+    rerender(
+      <FogRevealIndicator
+        fogZones={[baseFogZone, zone2]}
+        isTargetedView={true}
+      />
+    );
+
+    // Both should be glowing
+    expect(
+      screen.getByTestId(`fog-reveal-glow-${baseFogZone.id}`)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId(`fog-reveal-glow-${zone2.id}`)
+    ).toBeInTheDocument();
+
+    // After 2s, BOTH glows should be cleared (not just zone-2)
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
+
+    expect(
+      screen.queryByTestId(`fog-reveal-glow-${baseFogZone.id}`)
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId(`fog-reveal-glow-${zone2.id}`)
+    ).not.toBeInTheDocument();
   });
 });

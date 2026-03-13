@@ -88,6 +88,101 @@ describe("FogOverlayLayer", () => {
     });
   });
 
+  it("renders full fog when all zones are unrevealed (0 revealed zones)", () => {
+    const zones: FogZone[] = [
+      makeFogZone({ id: "fz-1", revealed: false }),
+      makeFogZone({ id: "fz-2", revealed: false, x: 500 }),
+    ];
+
+    render(
+      <FogOverlayLayer fogZones={zones} stageWidth={800} stageHeight={600} />
+    );
+
+    const rectCalls = mockRect.mock.calls;
+    // Only 1 rect: the full overlay. No revealed holes.
+    expect(rectCalls.length).toBe(1);
+    expect(rectCalls[0][0]).toMatchObject({
+      width: 800,
+      height: 600,
+      fill: "#000",
+      opacity: 0.85,
+    });
+  });
+
+  it("renders N clear holes for N revealed zones", () => {
+    const zones: FogZone[] = [
+      makeFogZone({ id: "fz-1", revealed: true, x: 0, y: 0, width: 100, height: 100 }),
+      makeFogZone({ id: "fz-2", revealed: true, x: 200, y: 200, width: 150, height: 150 }),
+      makeFogZone({ id: "fz-3", revealed: true, x: 400, y: 400, width: 50, height: 50 }),
+    ];
+
+    render(
+      <FogOverlayLayer fogZones={zones} stageWidth={800} stageHeight={600} />
+    );
+
+    const rectCalls = mockRect.mock.calls;
+    // 1 overlay + 3 revealed holes
+    expect(rectCalls.length).toBe(4);
+
+    // Each hole uses destination-out compositing
+    for (let i = 1; i <= 3; i++) {
+      expect(rectCalls[i][0]).toMatchObject({
+        globalCompositeOperation: "destination-out",
+      });
+    }
+
+    // Verify individual hole positions
+    expect(rectCalls[1][0]).toMatchObject({ x: 0, y: 0, width: 100, height: 100 });
+    expect(rectCalls[2][0]).toMatchObject({ x: 200, y: 200, width: 150, height: 150 });
+    expect(rectCalls[3][0]).toMatchObject({ x: 400, y: 400, width: 50, height: 50 });
+  });
+
+  it("renders adjacent revealed zones as separate holes (no gap, no overlap artifact)", () => {
+    // Two adjacent zones sharing an edge at x=100
+    const zones: FogZone[] = [
+      makeFogZone({ id: "fz-1", revealed: true, x: 0, y: 0, width: 100, height: 100 }),
+      makeFogZone({ id: "fz-2", revealed: true, x: 100, y: 0, width: 100, height: 100 }),
+    ];
+
+    render(
+      <FogOverlayLayer fogZones={zones} stageWidth={800} stageHeight={600} />
+    );
+
+    const rectCalls = mockRect.mock.calls;
+    // 1 overlay + 2 holes
+    expect(rectCalls.length).toBe(3);
+
+    // First hole ends at x=100, second starts at x=100 → seamless
+    expect(rectCalls[1][0]).toMatchObject({ x: 0, width: 100 });
+    expect(rectCalls[2][0]).toMatchObject({ x: 100, width: 100 });
+
+    // Both use destination-out → overlapping edges will just produce continuous clear area
+    expect(rectCalls[1][0].globalCompositeOperation).toBe("destination-out");
+    expect(rectCalls[2][0].globalCompositeOperation).toBe("destination-out");
+  });
+
+  it("uses 0.85 opacity for player viewMode (default)", () => {
+    const zones: FogZone[] = [makeFogZone()];
+
+    render(
+      <FogOverlayLayer fogZones={zones} stageWidth={800} stageHeight={600} viewMode="player" />
+    );
+
+    const overlayRect = mockRect.mock.calls[0][0];
+    expect(overlayRect.opacity).toBe(0.85);
+  });
+
+  it("uses 0.4 opacity for gm viewMode", () => {
+    const zones: FogZone[] = [makeFogZone()];
+
+    render(
+      <FogOverlayLayer fogZones={zones} stageWidth={800} stageHeight={600} viewMode="gm" />
+    );
+
+    const overlayRect = mockRect.mock.calls[0][0];
+    expect(overlayRect.opacity).toBe(0.4);
+  });
+
   it("renders layer with listening={false} for performance", () => {
     const zones: FogZone[] = [makeFogZone()];
 

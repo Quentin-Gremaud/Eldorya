@@ -125,10 +125,12 @@ jest.mock("react-konva", () => ({
     <div>{children}</div>
   ),
   Group: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
+    <div data-testid="token-group">{children}</div>
   ),
   Circle: () => <div />,
-  Text: () => <div />,
+  Text: (props: Record<string, unknown>) => (
+    <span data-testid="token-label">{props.text as string}</span>
+  ),
   Image: () => <div />,
   Rect: () => <div />,
 }));
@@ -294,5 +296,175 @@ describe("PlayerMapsPage", () => {
     // The breadcrumb shows the level name
     const breadcrumbArea = document.querySelector(".bg-muted");
     expect(breadcrumbArea).toBeInTheDocument();
+  });
+
+  describe("fog integration", () => {
+    const revealedZone = {
+      id: "fz-1",
+      mapLevelId: "l1",
+      playerId: "user-1",
+      x: 50,
+      y: 50,
+      width: 200,
+      height: 200,
+      revealed: true,
+      createdAt: "2026-03-11",
+    };
+
+    it("should render page with useFogState data", () => {
+      mockUseFogState.mockReturnValue({
+        fogZones: [revealedZone],
+        isLoading: false,
+        isError: false,
+      });
+
+      render(<PlayerMapsPage params={Promise.resolve({ id: "c1" })} />, {
+        wrapper: createWrapper(),
+      });
+
+      expect(screen.getByTestId("stage")).toBeInTheDocument();
+      expect(mockUseFogState).toHaveBeenCalledWith("c1", "user-1", "l1");
+    });
+
+    it("should update when fog zone is revealed (WebSocket simulation)", () => {
+      // Start with no fog zones
+      mockUseFogState.mockReturnValue({
+        fogZones: [],
+        isLoading: false,
+        isError: false,
+      });
+
+      const { rerender } = render(
+        <PlayerMapsPage params={Promise.resolve({ id: "c1" })} />,
+        { wrapper: createWrapper() },
+      );
+
+      // Simulate WebSocket FogZoneRevealed → useFogState returns new zone
+      mockUseFogState.mockReturnValue({
+        fogZones: [revealedZone],
+        isLoading: false,
+        isError: false,
+      });
+
+      rerender(<PlayerMapsPage params={Promise.resolve({ id: "c1" })} />);
+
+      // Page still renders correctly after fog update
+      expect(screen.getByTestId("stage")).toBeInTheDocument();
+    });
+
+    it("should update when fog zone is hidden (WebSocket simulation)", () => {
+      mockUseFogState.mockReturnValue({
+        fogZones: [revealedZone],
+        isLoading: false,
+        isError: false,
+      });
+
+      const { rerender } = render(
+        <PlayerMapsPage params={Promise.resolve({ id: "c1" })} />,
+        { wrapper: createWrapper() },
+      );
+
+      // Simulate WebSocket FogZoneHidden → zone removed
+      mockUseFogState.mockReturnValue({
+        fogZones: [],
+        isLoading: false,
+        isError: false,
+      });
+
+      rerender(<PlayerMapsPage params={Promise.resolve({ id: "c1" })} />);
+
+      expect(screen.getByTestId("stage")).toBeInTheDocument();
+    });
+
+    it("should handle reveal → hide cycle correctly", () => {
+      // 1. Start empty
+      mockUseFogState.mockReturnValue({ fogZones: [], isLoading: false, isError: false });
+
+      const { rerender } = render(
+        <PlayerMapsPage params={Promise.resolve({ id: "c1" })} />,
+        { wrapper: createWrapper() },
+      );
+
+      // 2. Reveal
+      mockUseFogState.mockReturnValue({ fogZones: [revealedZone], isLoading: false, isError: false });
+      rerender(<PlayerMapsPage params={Promise.resolve({ id: "c1" })} />);
+
+      // 3. Hide again
+      mockUseFogState.mockReturnValue({ fogZones: [], isLoading: false, isError: false });
+      rerender(<PlayerMapsPage params={Promise.resolve({ id: "c1" })} />);
+
+      // Page renders without errors
+      expect(screen.getByTestId("stage")).toBeInTheDocument();
+    });
+
+    it("should render with tokens filtered by fog in player view", () => {
+      const tokensData = [
+        { id: "t1", campaignId: "c1", mapLevelId: "l1", x: 100, y: 100, tokenType: "player", label: "Hero", createdAt: "2026-03-10", updatedAt: "2026-03-10" },
+        { id: "t2", campaignId: "c1", mapLevelId: "l1", x: 500, y: 500, tokenType: "monster", label: "Goblin", createdAt: "2026-03-10", updatedAt: "2026-03-10" },
+      ];
+
+      mockUseTokens.mockReturnValue({
+        tokens: tokensData,
+        isLoading: false,
+        isError: false,
+        error: null,
+      });
+
+      mockUseFogState.mockReturnValue({
+        fogZones: [revealedZone],
+        isLoading: false,
+        isError: false,
+      });
+
+      render(<PlayerMapsPage params={Promise.resolve({ id: "c1" })} />, {
+        wrapper: createWrapper(),
+      });
+
+      expect(screen.getByTestId("stage")).toBeInTheDocument();
+
+      // Token "Hero" at (100,100) is inside revealed zone (50,50)-(250,250) → visible
+      expect(screen.getByText("Hero")).toBeInTheDocument();
+
+      // Token "Goblin" at (500,500) is outside revealed zone → hidden by fog filtering
+      expect(screen.queryByText("Goblin")).not.toBeInTheDocument();
+    });
+
+    it("should respect prefers-reduced-motion for fog animations", () => {
+      (window.matchMedia as jest.Mock).mockImplementation((query: string) => ({
+        matches: query === "(prefers-reduced-motion: reduce)",
+        media: query,
+        onchange: null,
+        addListener: jest.fn(),
+        removeListener: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        dispatchEvent: jest.fn(),
+      }));
+
+      mockUseFogState.mockReturnValue({
+        fogZones: [revealedZone],
+        isLoading: false,
+        isError: false,
+      });
+
+      render(<PlayerMapsPage params={Promise.resolve({ id: "c1" })} />, {
+        wrapper: createWrapper(),
+      });
+
+      // Page renders without errors with reduced-motion
+      expect(screen.getByTestId("stage")).toBeInTheDocument();
+
+      // Restore default matchMedia mock
+      (window.matchMedia as jest.Mock).mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: jest.fn(),
+        removeListener: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        dispatchEvent: jest.fn(),
+      }));
+    });
   });
 });

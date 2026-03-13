@@ -1,21 +1,12 @@
 import { render, screen, act } from "@testing-library/react";
 import { FogHideIndicator } from "../fog-hide-indicator";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import type { FogZone } from "@/types/api";
 
-// Mock window.matchMedia
-Object.defineProperty(window, "matchMedia", {
-  writable: true,
-  value: jest.fn().mockImplementation((query: string) => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: jest.fn(),
-    removeListener: jest.fn(),
-    addEventListener: jest.fn(),
-    removeEventListener: jest.fn(),
-    dispatchEvent: jest.fn(),
-  })),
-});
+// Mock usePrefersReducedMotion hook
+jest.mock("@/hooks/use-prefers-reduced-motion", () => ({
+  usePrefersReducedMotion: jest.fn(() => false),
+}));
 
 // Mock react-konva
 jest.mock("react-konva", () => ({
@@ -52,12 +43,54 @@ describe("FogHideIndicator", () => {
     jest.useRealTimers();
   });
 
-  it("should not render when isTargetedView is false", () => {
+  it("should not render when isTargetedView is false and no viewMode", () => {
     const { container } = render(
       <FogHideIndicator fogZones={[baseFogZone]} isTargetedView={false} />
     );
 
     expect(container.innerHTML).toBe("");
+  });
+
+  it("should not animate in gm viewMode", () => {
+    const { rerender } = render(
+      <FogHideIndicator fogZones={[baseFogZone]} isTargetedView={false} viewMode="gm" />
+    );
+
+    rerender(
+      <FogHideIndicator fogZones={[]} isTargetedView={false} viewMode="gm" />
+    );
+
+    expect(
+      screen.queryByTestId(`fog-hide-fade-${baseFogZone.id}`)
+    ).not.toBeInTheDocument();
+  });
+
+  it("should animate in player viewMode", () => {
+    const { rerender } = render(
+      <FogHideIndicator fogZones={[baseFogZone]} isTargetedView={false} viewMode="player" />
+    );
+
+    rerender(
+      <FogHideIndicator fogZones={[]} isTargetedView={false} viewMode="player" />
+    );
+
+    expect(
+      screen.getByTestId(`fog-hide-fade-${baseFogZone.id}`)
+    ).toBeInTheDocument();
+  });
+
+  it("should animate in preview viewMode with isTargetedView", () => {
+    const { rerender } = render(
+      <FogHideIndicator fogZones={[baseFogZone]} isTargetedView={true} viewMode="preview" />
+    );
+
+    rerender(
+      <FogHideIndicator fogZones={[]} isTargetedView={true} viewMode="preview" />
+    );
+
+    expect(
+      screen.getByTestId(`fog-hide-fade-${baseFogZone.id}`)
+    ).toBeInTheDocument();
   });
 
   it("should not render fade when no zones are removed", () => {
@@ -132,17 +165,7 @@ describe("FogHideIndicator", () => {
   });
 
   it("should skip animation when prefers-reduced-motion is enabled", () => {
-    // Override matchMedia to return reduced-motion
-    (window.matchMedia as jest.Mock).mockImplementation((query: string) => ({
-      matches: query === "(prefers-reduced-motion: reduce)",
-      media: query,
-      onchange: null,
-      addListener: jest.fn(),
-      removeListener: jest.fn(),
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn(),
-      dispatchEvent: jest.fn(),
-    }));
+    (usePrefersReducedMotion as jest.Mock).mockReturnValue(true);
 
     const { rerender } = render(
       <FogHideIndicator fogZones={[baseFogZone]} isTargetedView={true} />
@@ -155,6 +178,50 @@ describe("FogHideIndicator", () => {
     // With reduced-motion, no fade overlay should be shown
     expect(
       screen.queryByTestId(`fog-hide-fade-${baseFogZone.id}`)
+    ).not.toBeInTheDocument();
+
+    (usePrefersReducedMotion as jest.Mock).mockReturnValue(false);
+  });
+
+  it("should clear all fade rects when zones are removed in rapid succession", () => {
+    const zone2: FogZone = { ...baseFogZone, id: "zone-2", x: 50 };
+
+    const { rerender } = render(
+      <FogHideIndicator fogZones={[baseFogZone, zone2]} isTargetedView={true} />
+    );
+
+    // Remove zone-1 first
+    rerender(
+      <FogHideIndicator fogZones={[zone2]} isTargetedView={true} />
+    );
+
+    expect(
+      screen.getByTestId(`fog-hide-fade-${baseFogZone.id}`)
+    ).toBeInTheDocument();
+
+    // Rapidly remove zone-2 before zone-1's timer fires (within 1s)
+    rerender(
+      <FogHideIndicator fogZones={[]} isTargetedView={true} />
+    );
+
+    // Both should be showing fade
+    expect(
+      screen.getByTestId(`fog-hide-fade-${baseFogZone.id}`)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByTestId(`fog-hide-fade-${zone2.id}`)
+    ).toBeInTheDocument();
+
+    // After 1s, BOTH fades should be cleared (not just zone-2)
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+
+    expect(
+      screen.queryByTestId(`fog-hide-fade-${baseFogZone.id}`)
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId(`fog-hide-fade-${zone2.id}`)
     ).not.toBeInTheDocument();
   });
 });

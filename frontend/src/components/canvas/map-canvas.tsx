@@ -285,12 +285,14 @@ export function MapCanvas({
           <FogRevealIndicator
             fogZones={fogZones}
             isTargetedView={viewMode === "preview" && !!playerId}
+            viewMode={viewMode}
           />
         )}
         {fogZones && (
           <FogHideIndicator
             fogZones={fogZones}
             isTargetedView={viewMode === "preview" && !!playerId}
+            viewMode={viewMode}
           />
         )}
       </Stage>
