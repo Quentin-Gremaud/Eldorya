@@ -57,6 +57,39 @@ describe('TokenProjection', () => {
             y: 200,
             tokenType: 'player',
             label: 'Warrior',
+            destinationMapLevelId: null,
+            createdAt: new Date('2026-03-09T10:00:00.000Z'),
+          },
+        ],
+        skipDuplicates: true,
+      });
+    });
+
+    it('should include destinationMapLevelId for location tokens', async () => {
+      const destinationMapLevelId = '880e8400-e29b-41d4-a716-446655440001';
+      await projection.handleTokenPlaced({
+        tokenId,
+        campaignId,
+        mapLevelId,
+        x: 100,
+        y: 200,
+        tokenType: 'location',
+        label: 'Tavern Entrance',
+        placedAt: '2026-03-09T10:00:00.000Z',
+        destinationMapLevelId,
+      });
+
+      expect(mockPrisma.token.createMany).toHaveBeenCalledWith({
+        data: [
+          {
+            id: tokenId,
+            campaignId,
+            mapLevelId,
+            x: 100,
+            y: 200,
+            tokenType: 'location',
+            label: 'Tavern Entrance',
+            destinationMapLevelId,
             createdAt: new Date('2026-03-09T10:00:00.000Z'),
           },
         ],
@@ -79,6 +112,23 @@ describe('TokenProjection', () => {
       expect(mockPrisma.token.updateMany).toHaveBeenCalledWith({
         where: { id: tokenId, campaignId },
         data: { x: 300, y: 400 },
+      });
+    });
+  });
+
+  describe('handleLocationTokenLinked', () => {
+    it('should updateMany with new destinationMapLevelId', async () => {
+      const destinationMapLevelId = '880e8400-e29b-41d4-a716-446655440001';
+      await projection.handleLocationTokenLinked({
+        tokenId,
+        campaignId,
+        destinationMapLevelId,
+        linkedAt: '2026-03-09T11:00:00.000Z',
+      });
+
+      expect(mockPrisma.token.updateMany).toHaveBeenCalledWith({
+        where: { id: tokenId, campaignId },
+        data: { destinationMapLevelId },
       });
     });
   });

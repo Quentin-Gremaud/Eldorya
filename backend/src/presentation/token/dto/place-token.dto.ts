@@ -26,12 +26,16 @@ export class PlaceTokenDto {
   @Max(100000)
   y!: number;
 
-  @IsIn(['player', 'npc', 'monster'])
+  @IsIn(['player', 'npc', 'monster', 'location'])
   tokenType!: string;
 
   @IsString()
   @Length(1, 100)
   label!: string;
+
+  @IsUUID()
+  @IsOptional()
+  destinationMapLevelId?: string;
 
   @IsUUID()
   @IsOptional()

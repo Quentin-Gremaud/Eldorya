@@ -6,31 +6,20 @@ import { createTokensApi } from "@/lib/api/tokens-api";
 import type { Token } from "@/types/api";
 import { toast } from "sonner";
 
-interface PlaceTokenInput {
+interface LinkLocationTokenInput {
   tokenId: string;
   mapLevelId: string;
-  x: number;
-  y: number;
-  tokenType: string;
-  label: string;
-  destinationMapLevelId?: string;
+  destinationMapLevelId: string;
 }
 
-export function usePlaceToken(campaignId: string) {
+export function useLinkLocationToken(campaignId: string) {
   const apiFetch = useApiClient();
   const api = createTokensApi(apiFetch);
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (input: PlaceTokenInput) =>
-      api.placeToken(campaignId, {
-        tokenId: input.tokenId,
-        mapLevelId: input.mapLevelId,
-        x: input.x,
-        y: input.y,
-        tokenType: input.tokenType,
-        label: input.label,
-        commandId: crypto.randomUUID(),
+    mutationFn: (input: LinkLocationTokenInput) =>
+      api.linkLocationToken(campaignId, input.tokenId, {
         destinationMapLevelId: input.destinationMapLevelId,
       }),
 
@@ -41,26 +30,13 @@ export function usePlaceToken(campaignId: string) {
 
       const previousTokens = queryClient.getQueryData<Token[]>(queryKey);
 
-      const now = new Date().toISOString();
-      const optimistic: Token = {
-        id: input.tokenId,
-        campaignId,
-        mapLevelId: input.mapLevelId,
-        x: input.x,
-        y: input.y,
-        tokenType: input.tokenType,
-        label: input.label,
-        createdAt: now,
-        updatedAt: now,
-        ...(input.destinationMapLevelId !== undefined && {
-          destinationMapLevelId: input.destinationMapLevelId,
-        }),
-      };
-
-      queryClient.setQueryData<Token[]>(queryKey, (old) => [
-        ...(old ?? []),
-        optimistic,
-      ]);
+      queryClient.setQueryData<Token[]>(queryKey, (old) =>
+        (old ?? []).map((t) =>
+          t.id === input.tokenId
+            ? { ...t, destinationMapLevelId: input.destinationMapLevelId }
+            : t
+        )
+      );
 
       return { previousTokens, queryKey };
     },
@@ -69,11 +45,11 @@ export function usePlaceToken(campaignId: string) {
       if (context?.previousTokens) {
         queryClient.setQueryData(context.queryKey, context.previousTokens);
       }
-      toast.error("Failed to place token");
+      toast.error("Failed to update location token destination");
     },
 
     onSuccess: () => {
-      toast.success("Token placed");
+      toast.success("Location token destination updated");
     },
 
     onSettled: (_data, _error, input) => {

@@ -7,5 +7,6 @@ export class PlaceTokenCommand {
     public readonly y: number,
     public readonly tokenType: string,
     public readonly label: string,
+    public readonly destinationMapLevelId?: string,
   ) {}
 }

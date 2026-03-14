@@ -24,6 +24,7 @@ interface MapCanvasProps {
   viewMode?: ViewMode;
   playerId?: string;
   fogZones?: FogZone[];
+  mapLevels?: MapLevel[];
   activeTool?: FogTool;
   onFogPaint?: (zone: { x: number; y: number; width: number; height: number }) => void;
   onTokenPlace?: (
@@ -36,6 +37,8 @@ interface MapCanvasProps {
   ) => void;
   onTokenMove?: (tokenId: string, x: number, y: number) => void;
   onTokenRemove?: (tokenId: string) => void;
+  onLocationNavigate?: (destinationMapLevelId: string) => void;
+  onBrokenLinkClick?: (tokenId: string) => void;
 }
 
 export function MapCanvas({
@@ -50,6 +53,9 @@ export function MapCanvas({
   onTokenPlace,
   onTokenMove,
   onTokenRemove,
+  onLocationNavigate,
+  onBrokenLinkClick,
+  mapLevels,
 }: MapCanvasProps) {
   const isGmMode = viewMode === "gm";
   const isFogToolActive = activeTool === "fog-reveal" || activeTool === "fog-reveal-all" || activeTool === "fog-hide" || activeTool === "fog-hide-all";
@@ -269,8 +275,11 @@ export function MapCanvas({
           interactive={effectiveInteractive}
           viewMode={viewMode}
           fogZones={fogZones}
+          mapLevels={mapLevels}
           onTokenMove={effectiveInteractive ? onTokenMove : undefined}
           onContextMenu={effectiveInteractive ? handleContextMenu : undefined}
+          onLocationNavigate={onLocationNavigate}
+          onBrokenLinkClick={onBrokenLinkClick}
         />
         <FogOverlayLayer
           fogZones={fogZones}

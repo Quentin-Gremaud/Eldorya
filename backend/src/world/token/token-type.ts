@@ -1,6 +1,6 @@
 import { InvalidTokenTypeException } from './exceptions/invalid-token-type.exception.js';
 
-const ALLOWED_TYPES = ['player', 'npc', 'monster'] as const;
+const ALLOWED_TYPES = ['player', 'npc', 'monster', 'location'] as const;
 export type TokenTypeValue = (typeof ALLOWED_TYPES)[number];
 
 export class TokenType {

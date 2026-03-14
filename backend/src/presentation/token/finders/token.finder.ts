@@ -9,6 +9,7 @@ export interface TokenResult {
   y: number;
   tokenType: string;
   label: string;
+  destinationMapLevelId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -34,6 +35,7 @@ export class TokenFinder {
       y: t.y,
       tokenType: t.tokenType,
       label: t.label,
+      destinationMapLevelId: t.destinationMapLevelId,
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),
     }));

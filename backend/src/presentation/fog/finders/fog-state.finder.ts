@@ -79,6 +79,6 @@ export class FogStateFinder {
       return [];
     }
 
-    return fogState.revealedZones as FogZoneResult[];
+    return fogState.revealedZones as unknown as FogZoneResult[];
   }
 }

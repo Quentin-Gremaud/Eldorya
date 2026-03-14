@@ -11,7 +11,7 @@ export class InvalidTokenTypeException extends DomainException {
 
   static invalidValue(type: string): InvalidTokenTypeException {
     return new InvalidTokenTypeException(
-      `Invalid TokenType: '${type}'. Must be one of: player, npc, monster.`,
+      `Invalid TokenType: '${type}'. Must be one of: player, npc, monster, location.`,
     );
   }
 }

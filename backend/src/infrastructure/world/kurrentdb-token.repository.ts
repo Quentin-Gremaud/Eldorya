@@ -5,6 +5,7 @@ import { TokenAggregate, type TokenEvent } from '../../world/token/token.aggrega
 import { TokenPlaced } from '../../world/token/events/token-placed.event.js';
 import { TokenMoved } from '../../world/token/events/token-moved.event.js';
 import { TokenRemoved } from '../../world/token/events/token-removed.event.js';
+import { LocationTokenLinked } from '../../world/token/events/location-token-linked.event.js';
 import { KurrentDbService } from '../eventstore/kurrentdb.service.js';
 import type { Clock } from '../../shared/clock.js';
 import { CLOCK } from '../../shared/clock.js';
@@ -81,6 +82,9 @@ export class KurrentDbTokenRepository implements TokenRepository {
         tokenType: event.tokenType,
         label: event.label,
         placedAt: event.placedAt,
+        ...(event.destinationMapLevelId !== undefined && {
+          destinationMapLevelId: event.destinationMapLevelId,
+        }),
       };
     }
     if (event instanceof TokenMoved) {
@@ -99,6 +103,14 @@ export class KurrentDbTokenRepository implements TokenRepository {
         mapLevelId: event.mapLevelId,
         tokenId: event.tokenId,
         removedAt: event.removedAt,
+      };
+    }
+    if (event instanceof LocationTokenLinked) {
+      return {
+        campaignId: event.campaignId,
+        tokenId: event.tokenId,
+        destinationMapLevelId: event.destinationMapLevelId,
+        linkedAt: event.linkedAt,
       };
     }
     const _exhaustive: never = event;

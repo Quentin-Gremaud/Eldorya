@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { Users, Shield, Skull } from "lucide-react";
+import { Users, Shield, Skull, MapPin } from "lucide-react";
 import { TOKEN_COLORS } from "@/components/canvas/token-colors";
 import type { TokenType } from "@/types/api";
 
@@ -11,6 +11,7 @@ const TOKEN_TEMPLATES: readonly { type: TokenType; label: string; icon: typeof U
   { type: "player", label: "Player", icon: Users },
   { type: "npc", label: "NPC", icon: Shield },
   { type: "monster", label: "Monster", icon: Skull },
+  { type: "location", label: "Location", icon: MapPin },
 ];
 
 export function TokenPalette() {
@@ -18,6 +19,7 @@ export function TokenPalette() {
     player: "Player",
     npc: "NPC",
     monster: "Monster",
+    location: "Location",
   });
 
   const handleDragStart = (

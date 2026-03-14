@@ -2,13 +2,16 @@ import { TokenAggregate } from '../token.aggregate.js';
 import { TokenPlaced } from '../events/token-placed.event.js';
 import { TokenMoved } from '../events/token-moved.event.js';
 import { TokenRemoved } from '../events/token-removed.event.js';
+import { LocationTokenLinked } from '../events/location-token-linked.event.js';
 import { TokenAlreadyExistsException } from '../exceptions/token-already-exists.exception.js';
 import { TokenNotFoundException } from '../exceptions/token-not-found.exception.js';
+import { NotALocationTokenException } from '../exceptions/not-a-location-token.exception.js';
 import { InvalidTokenIdException } from '../exceptions/invalid-token-id.exception.js';
 import { InvalidTokenPositionException } from '../exceptions/invalid-token-position.exception.js';
 import { InvalidTokenTypeException } from '../exceptions/invalid-token-type.exception.js';
 import { InvalidTokenLabelException } from '../exceptions/invalid-token-label.exception.js';
 import { MapLevelRequiredException } from '../exceptions/map-level-required.exception.js';
+import { DestinationRequiredForLocationTokenException } from '../exceptions/destination-required-for-location-token.exception.js';
 import type { Clock } from '../../../shared/clock.js';
 
 describe('TokenAggregate', () => {
@@ -16,6 +19,7 @@ describe('TokenAggregate', () => {
   const mapLevelId = '660e8400-e29b-41d4-a716-446655440001';
   const tokenId1 = '770e8400-e29b-41d4-a716-446655440001';
   const tokenId2 = '770e8400-e29b-41d4-a716-446655440002';
+  const destinationMapLevelId = '880e8400-e29b-41d4-a716-446655440001';
 
   const fixedDate = new Date('2026-03-09T10:00:00.000Z');
   const clock: Clock = { now: () => fixedDate };
@@ -300,6 +304,171 @@ describe('TokenAggregate', () => {
       expect(() => TokenAggregate.loadFromHistory(campaignId, events)).toThrow(
         'Invalid event data',
       );
+    });
+  });
+
+  describe('placeToken - location type', () => {
+    it('should place a location token with destinationMapLevelId', () => {
+      const aggregate = TokenAggregate.createNew(campaignId);
+      aggregate.placeToken(tokenId1, mapLevelId, 100, 200, 'location', 'Tavern Entrance', clock, destinationMapLevelId);
+
+      const events = aggregate.getUncommittedEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toBeInstanceOf(TokenPlaced);
+
+      const event = events[0] as TokenPlaced;
+      expect(event.tokenType).toBe('location');
+      expect(event.destinationMapLevelId).toBe(destinationMapLevelId);
+      expect(event.label).toBe('Tavern Entrance');
+    });
+
+    it('should store destinationMapLevelId in aggregate state', () => {
+      const aggregate = TokenAggregate.createNew(campaignId);
+      aggregate.placeToken(tokenId1, mapLevelId, 100, 200, 'location', 'Tavern Entrance', clock, destinationMapLevelId);
+
+      const token = aggregate.getTokens().get(tokenId1)!;
+      expect(token.destinationMapLevelId).toBe(destinationMapLevelId);
+      expect(token.tokenType).toBe('location');
+    });
+
+    it('should throw DestinationRequiredForLocationTokenException when location token has no destination', () => {
+      const aggregate = TokenAggregate.createNew(campaignId);
+      expect(() =>
+        aggregate.placeToken(tokenId1, mapLevelId, 100, 200, 'location', 'Tavern Entrance', clock),
+      ).toThrow(DestinationRequiredForLocationTokenException);
+    });
+
+    it('should allow regular token without destinationMapLevelId', () => {
+      const aggregate = TokenAggregate.createNew(campaignId);
+      aggregate.placeToken(tokenId1, mapLevelId, 100, 200, 'player', 'Warrior', clock);
+
+      const token = aggregate.getTokens().get(tokenId1)!;
+      expect(token.destinationMapLevelId).toBeUndefined();
+    });
+  });
+
+  describe('linkToMapLevel', () => {
+    const newDestinationId = '990e8400-e29b-41d4-a716-446655440001';
+
+    it('should link a location token to a new destination', () => {
+      const aggregate = TokenAggregate.createNew(campaignId);
+      aggregate.placeToken(tokenId1, mapLevelId, 100, 200, 'location', 'Tavern Entrance', clock, destinationMapLevelId);
+      aggregate.linkToMapLevel(tokenId1, newDestinationId, clock);
+
+      const events = aggregate.getUncommittedEvents();
+      expect(events).toHaveLength(2);
+      expect(events[1]).toBeInstanceOf(LocationTokenLinked);
+
+      const event = events[1] as LocationTokenLinked;
+      expect(event.campaignId).toBe(campaignId);
+      expect(event.tokenId).toBe(tokenId1);
+      expect(event.destinationMapLevelId).toBe(newDestinationId);
+    });
+
+    it('should update destination in aggregate state', () => {
+      const aggregate = TokenAggregate.createNew(campaignId);
+      aggregate.placeToken(tokenId1, mapLevelId, 100, 200, 'location', 'Tavern Entrance', clock, destinationMapLevelId);
+      aggregate.linkToMapLevel(tokenId1, newDestinationId, clock);
+
+      const token = aggregate.getTokens().get(tokenId1)!;
+      expect(token.destinationMapLevelId).toBe(newDestinationId);
+    });
+
+    it('should throw TokenNotFoundException for non-existent token', () => {
+      const aggregate = TokenAggregate.createNew(campaignId);
+      expect(() => aggregate.linkToMapLevel(tokenId1, newDestinationId, clock)).toThrow(
+        TokenNotFoundException,
+      );
+    });
+
+    it('should throw NotALocationTokenException for non-location token', () => {
+      const aggregate = TokenAggregate.createNew(campaignId);
+      aggregate.placeToken(tokenId1, mapLevelId, 100, 200, 'player', 'Warrior', clock);
+
+      expect(() => aggregate.linkToMapLevel(tokenId1, newDestinationId, clock)).toThrow(
+        NotALocationTokenException,
+      );
+    });
+  });
+
+  describe('loadFromHistory - location tokens', () => {
+    it('should reconstruct location token with destinationMapLevelId', () => {
+      const events = [
+        {
+          type: 'TokenPlaced',
+          data: {
+            campaignId,
+            mapLevelId,
+            tokenId: tokenId1,
+            x: 100,
+            y: 200,
+            tokenType: 'location',
+            label: 'Tavern Entrance',
+            placedAt: '2026-03-09T10:00:00.000Z',
+            destinationMapLevelId,
+          },
+        },
+      ];
+
+      const aggregate = TokenAggregate.loadFromHistory(campaignId, events);
+      const token = aggregate.getTokens().get(tokenId1)!;
+      expect(token.tokenType).toBe('location');
+      expect(token.destinationMapLevelId).toBe(destinationMapLevelId);
+    });
+
+    it('should apply LocationTokenLinked event in history', () => {
+      const newDestinationId = '990e8400-e29b-41d4-a716-446655440001';
+      const events = [
+        {
+          type: 'TokenPlaced',
+          data: {
+            campaignId,
+            mapLevelId,
+            tokenId: tokenId1,
+            x: 100,
+            y: 200,
+            tokenType: 'location',
+            label: 'Tavern Entrance',
+            placedAt: '2026-03-09T10:00:00.000Z',
+            destinationMapLevelId,
+          },
+        },
+        {
+          type: 'LocationTokenLinked',
+          data: {
+            campaignId,
+            tokenId: tokenId1,
+            destinationMapLevelId: newDestinationId,
+            linkedAt: '2026-03-09T11:00:00.000Z',
+          },
+        },
+      ];
+
+      const aggregate = TokenAggregate.loadFromHistory(campaignId, events);
+      const token = aggregate.getTokens().get(tokenId1)!;
+      expect(token.destinationMapLevelId).toBe(newDestinationId);
+    });
+
+    it('should handle legacy TokenPlaced events without destinationMapLevelId', () => {
+      const events = [
+        {
+          type: 'TokenPlaced',
+          data: {
+            campaignId,
+            mapLevelId,
+            tokenId: tokenId1,
+            x: 100,
+            y: 200,
+            tokenType: 'player',
+            label: 'Warrior',
+            placedAt: '2026-03-09T10:00:00.000Z',
+          },
+        },
+      ];
+
+      const aggregate = TokenAggregate.loadFromHistory(campaignId, events);
+      const token = aggregate.getTokens().get(tokenId1)!;
+      expect(token.destinationMapLevelId).toBeUndefined();
     });
   });
 

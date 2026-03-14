@@ -5,6 +5,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { START, eventTypeFilter } from '@kurrent/kurrentdb-client';
+import { Prisma } from '@prisma/client';
 import { KurrentDbService } from '../../../infrastructure/eventstore/kurrentdb.service.js';
 import { PrismaService } from '../../../infrastructure/database/prisma.service.js';
 
@@ -146,7 +147,7 @@ export class FogStateProjection implements OnModuleInit, OnModuleDestroy {
     });
 
     if (existing) {
-      const zones = existing.revealedZones as RevealedZoneData[];
+      const zones = existing.revealedZones as unknown as RevealedZoneData[];
       const alreadyExists = zones.some((z) => z.id === fogZoneId);
       if (!alreadyExists) {
         zones.push(newZone);
@@ -154,7 +155,7 @@ export class FogStateProjection implements OnModuleInit, OnModuleDestroy {
           where: {
             campaignId_playerId_mapLevelId: { campaignId, playerId, mapLevelId },
           },
-          data: { revealedZones: zones },
+          data: { revealedZones: zones as unknown as Prisma.InputJsonValue },
         });
       }
     } else {
@@ -163,7 +164,7 @@ export class FogStateProjection implements OnModuleInit, OnModuleDestroy {
           campaignId,
           playerId,
           mapLevelId,
-          revealedZones: [newZone],
+          revealedZones: [newZone] as unknown as Prisma.InputJsonValue,
         },
       });
     }
@@ -186,14 +187,14 @@ export class FogStateProjection implements OnModuleInit, OnModuleDestroy {
     });
 
     if (existing) {
-      const zones = (existing.revealedZones as RevealedZoneData[]).filter(
+      const zones = (existing.revealedZones as unknown as RevealedZoneData[]).filter(
         (z) => z.id !== fogZoneId,
       );
       await this.prisma.fogState.update({
         where: {
           campaignId_playerId_mapLevelId: { campaignId, playerId, mapLevelId },
         },
-        data: { revealedZones: zones },
+        data: { revealedZones: zones as unknown as Prisma.InputJsonValue },
       });
     }
 

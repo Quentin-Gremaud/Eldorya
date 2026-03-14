@@ -204,9 +204,10 @@ model Token {
   x          Int
   y          Int
   tokenType  String   @map("token_type") @db.VarChar(20)
-  label      String   @db.VarChar(100)
-  createdAt  DateTime @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  label                String   @db.VarChar(100)
+  destinationMapLevelId String? @map("destination_map_level_id")
+  createdAt            DateTime @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@index([campaignId, mapLevelId])
   @@map("tokens")

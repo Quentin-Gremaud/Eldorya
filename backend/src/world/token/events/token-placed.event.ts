@@ -10,5 +10,6 @@ export class TokenPlaced {
     public readonly tokenType: string,
     public readonly label: string,
     public readonly placedAt: string,
+    public readonly destinationMapLevelId?: string,
   ) {}
 }

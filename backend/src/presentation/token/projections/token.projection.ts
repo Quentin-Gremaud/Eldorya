@@ -47,7 +47,7 @@ export class TokenProjection implements OnModuleInit, OnModuleDestroy {
 
       const subscription = client.subscribeToAll({
         fromPosition,
-        filter: eventTypeFilter({ prefixes: ['Token'] }),
+        filter: eventTypeFilter({ prefixes: ['Token', 'LocationToken'] }),
       });
 
       this.logger.log(
@@ -68,6 +68,8 @@ export class TokenProjection implements OnModuleInit, OnModuleDestroy {
             await this.handleTokenMoved(data);
           } else if (eventType === 'TokenRemoved') {
             await this.handleTokenRemoved(data);
+          } else if (eventType === 'LocationTokenLinked') {
+            await this.handleLocationTokenLinked(data);
           }
 
           const position = resolvedEvent.event?.position;
@@ -115,6 +117,7 @@ export class TokenProjection implements OnModuleInit, OnModuleDestroy {
     const tokenType = data.tokenType as string;
     const label = data.label as string;
     const placedAt = data.placedAt as string;
+    const destinationMapLevelId = data.destinationMapLevelId as string | undefined;
 
     await this.prisma.token.createMany({
       data: [
@@ -126,6 +129,7 @@ export class TokenProjection implements OnModuleInit, OnModuleDestroy {
           y,
           tokenType,
           label,
+          destinationMapLevelId: destinationMapLevelId ?? null,
           createdAt: new Date(placedAt),
         },
       ],
@@ -160,5 +164,20 @@ export class TokenProjection implements OnModuleInit, OnModuleDestroy {
     });
 
     this.logger.log(`Token ${tokenId} removed`);
+  }
+
+  async handleLocationTokenLinked(data: Record<string, unknown>): Promise<void> {
+    const tokenId = data.tokenId as string;
+    const campaignId = data.campaignId as string;
+    const destinationMapLevelId = data.destinationMapLevelId as string;
+
+    await this.prisma.token.updateMany({
+      where: { id: tokenId, campaignId },
+      data: { destinationMapLevelId },
+    });
+
+    this.logger.log(
+      `Token ${tokenId} linked to destination map level ${destinationMapLevelId}`,
+    );
   }
 }

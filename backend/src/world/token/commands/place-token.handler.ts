@@ -30,6 +30,7 @@ export class PlaceTokenHandler
       command.tokenType,
       command.label,
       this.clock,
+      command.destinationMapLevelId,
     );
 
     if (aggregate.isNew()) {

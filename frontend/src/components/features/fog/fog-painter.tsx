@@ -100,7 +100,7 @@ export function FogPainter({ active, onFogPaint }: FogPainterProps) {
         y={-10000}
         width={20000}
         height={20000}
-        fill="transparent"
+        fill="rgba(0,0,0,0.001)"
         listening={active}
       />
       {/* Draft rectangle preview */}

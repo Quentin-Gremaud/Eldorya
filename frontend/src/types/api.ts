@@ -242,7 +242,7 @@ export interface SetMapBackgroundPayload {
 
 // Token types
 
-export type TokenType = "player" | "npc" | "monster";
+export type TokenType = "player" | "npc" | "monster" | "location";
 
 export interface Token {
   id: string;
@@ -252,6 +252,7 @@ export interface Token {
   y: number;
   tokenType: TokenType;
   label: string;
+  destinationMapLevelId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -264,6 +265,11 @@ export interface PlaceTokenPayload {
   tokenType: TokenType;
   label: string;
   commandId: string;
+  destinationMapLevelId?: string;
+}
+
+export interface LinkLocationTokenPayload {
+  destinationMapLevelId: string;
 }
 
 export interface MoveTokenPayload {

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useState, Suspense, lazy } from "react";
+import { use, useState, useCallback, Suspense, lazy } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUser } from "@clerk/nextjs";
 import { useMapLevels } from "@/hooks/use-map-levels";
@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { AlertCircle, Map, ArrowLeft } from "lucide-react";
 import { useCampaign } from "@/hooks/use-campaign";
 import { AppBreadcrumb } from "@/components/layout/app-breadcrumb";
+import { toast } from "sonner";
 import Link from "next/link";
 
 const LazyMapCanvas = lazy(
@@ -56,6 +57,17 @@ export function PlayerMapsContent({ campaignId }: { campaignId: string }) {
   const { fogZones } = useFogState(campaignId, playerId, effectiveSelectedId);
 
   const selectedLevel = mapLevels.find((l) => l.id === effectiveSelectedId);
+
+  const handleLocationNavigate = useCallback(
+    (destinationMapLevelId: string) => {
+      setSelectedMapLevelId(destinationMapLevelId);
+    },
+    []
+  );
+
+  const handleBrokenLinkClick = useCallback(() => {
+    toast.error("Linked map level no longer exists");
+  }, []);
 
   if (isCampaignLoading || isLoading) {
     return (
@@ -199,6 +211,9 @@ export function PlayerMapsContent({ campaignId }: { campaignId: string }) {
                       viewMode="player"
                       playerId={playerId ?? undefined}
                       fogZones={fogZones}
+                      mapLevels={mapLevels}
+                      onLocationNavigate={handleLocationNavigate}
+                      onBrokenLinkClick={handleBrokenLinkClick}
                     />
                   </Suspense>
                 )}

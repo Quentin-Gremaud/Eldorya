@@ -1,6 +1,6 @@
 "use client";
 
-import type { Token, PlaceTokenPayload, MoveTokenPayload, RemoveTokenPayload } from "@/types/api";
+import type { Token, PlaceTokenPayload, MoveTokenPayload, RemoveTokenPayload, LinkLocationTokenPayload } from "@/types/api";
 
 type ApiFetch = <T>(path: string, options?: RequestInit) => Promise<T>;
 
@@ -42,5 +42,19 @@ export function createTokensApi(apiFetch: ApiFetch) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       }),
+
+    linkLocationToken: (
+      campaignId: string,
+      tokenId: string,
+      payload: LinkLocationTokenPayload
+    ) =>
+      apiFetch<void>(
+        `/api/campaigns/${campaignId}/tokens/${tokenId}/destination`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      ),
   };
 }

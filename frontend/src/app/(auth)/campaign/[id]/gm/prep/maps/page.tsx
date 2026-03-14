@@ -10,6 +10,7 @@ import { useTokens } from "@/hooks/use-tokens";
 import { usePlaceToken } from "@/hooks/use-place-token";
 import { useMoveToken } from "@/hooks/use-move-token";
 import { useRemoveToken } from "@/hooks/use-remove-token";
+import { useLinkLocationToken } from "@/hooks/use-link-location-token";
 import { useCampaignPlayers } from "@/hooks/use-campaign-players";
 import { useRevealFogZone } from "@/hooks/use-reveal-fog-zone";
 import { useRevealFogZoneToAll } from "@/hooks/use-reveal-fog-zone-to-all";
@@ -22,6 +23,7 @@ import { CreateMapLevelDialog } from "@/components/features/maps/create-map-leve
 import { ImportMapBackgroundButton } from "@/components/features/maps/import-map-background-button";
 import { MapCanvas } from "@/components/canvas/map-canvas";
 import { TokenPalette } from "@/components/features/maps/token-palette";
+import { LocationLinkDialog } from "@/components/features/maps/location-link-dialog";
 import { PlayerPreviewBar } from "@/components/features/maps/player-preview-bar";
 import { FogToolbar, type FogTool } from "@/components/features/fog/fog-toolbar";
 import { FogPlayerSelector } from "@/components/features/fog/fog-player-selector";
@@ -99,6 +101,18 @@ export default function GmPrepMapsPage({
   const placeToken = usePlaceToken(campaignId);
   const moveToken = useMoveToken(campaignId);
   const removeToken = useRemoveToken(campaignId);
+  const linkLocationToken = useLinkLocationToken(campaignId);
+
+  const [locationLinkDialog, setLocationLinkDialog] = useState<{
+    open: boolean;
+    tokenId: string;
+    mapLevelId: string;
+    x: number;
+    y: number;
+    label: string;
+    editMode?: boolean;
+    initialDestinationId?: string;
+  } | null>(null);
 
   const handleCreateLevel = (data: { name: string; parentId?: string }) => {
     createMapLevel.mutate(
@@ -128,8 +142,57 @@ export default function GmPrepMapsPage({
     tokenType: string,
     label: string
   ) => {
+    if (tokenType === "location") {
+      // Open dialog to select destination before placing
+      setLocationLinkDialog({
+        open: true,
+        tokenId,
+        mapLevelId,
+        x,
+        y,
+        label,
+      });
+      return;
+    }
     placeToken.mutate({ tokenId, mapLevelId, x, y, tokenType, label });
   };
+
+  const handleLocationLinkSelect = (destinationMapLevelId: string) => {
+    if (!locationLinkDialog) return;
+    const { tokenId, mapLevelId, x, y, label } = locationLinkDialog;
+    if (locationLinkDialog.editMode) {
+      // Updating existing token destination
+      linkLocationToken.mutate({ tokenId, mapLevelId, destinationMapLevelId });
+    } else {
+      // Placing new location token with destination
+      placeToken.mutate({
+        tokenId,
+        mapLevelId,
+        x,
+        y,
+        tokenType: "location",
+        label,
+        destinationMapLevelId,
+      });
+    }
+    setLocationLinkDialog(null);
+  };
+
+  const handleLocationLinkCancel = () => {
+    // If it was a new token placement, do nothing (token wasn't placed yet)
+    setLocationLinkDialog(null);
+  };
+
+  const handleLocationNavigate = useCallback(
+    (destinationMapLevelId: string) => {
+      setSelectedMapLevelId(destinationMapLevelId);
+    },
+    []
+  );
+
+  const handleBrokenLinkClick = useCallback(() => {
+    toast.error("Linked map level no longer exists");
+  }, []);
 
   const handleTokenMove = (tokenId: string, x: number, y: number) => {
     if (!selectedMapLevelId) return;
@@ -395,11 +458,14 @@ export default function GmPrepMapsPage({
                     viewMode={isPreviewMode ? "preview" : "gm"}
                     playerId={isPreviewMode ? previewPlayerId ?? undefined : undefined}
                     fogZones={fogZones}
+                    mapLevels={mapLevels}
                     activeTool={isPreviewMode ? "select" : activeTool}
                     onFogPaint={handleFogPaint}
                     onTokenPlace={handleTokenPlace}
                     onTokenMove={handleTokenMove}
                     onTokenRemove={handleTokenRemove}
+                    onLocationNavigate={handleLocationNavigate}
+                    onBrokenLinkClick={handleBrokenLinkClick}
                   />
                 )}
               </div>
@@ -433,6 +499,21 @@ export default function GmPrepMapsPage({
         isPending={createMapLevel.isPending}
         levels={mapLevels}
       />
+
+      {/* Location Link Dialog */}
+      {locationLinkDialog && selectedMapLevelId && (
+        <LocationLinkDialog
+          open={locationLinkDialog.open}
+          onOpenChange={(open) => {
+            if (!open) handleLocationLinkCancel();
+          }}
+          mapLevels={mapLevels}
+          currentMapLevelId={selectedMapLevelId}
+          onSelect={handleLocationLinkSelect}
+          onCancel={handleLocationLinkCancel}
+          initialDestinationId={locationLinkDialog.initialDestinationId}
+        />
+      )}
     </main>
   );
 }
