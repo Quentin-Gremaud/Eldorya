@@ -58,5 +58,6 @@ import { CampaignAnnouncementProjection } from './projections/campaign-announcem
     CampaignProjection,
     CampaignAnnouncementProjection,
   ],
+  exports: [CampaignDetailFinder],
 })
 export class CampaignPresentationModule {}

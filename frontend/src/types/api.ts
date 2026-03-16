@@ -328,6 +328,26 @@ export interface FogZone {
   createdAt: string;
 }
 
+// Session types
+
+export interface Session {
+  id: string;
+  campaignId: string;
+  gmUserId: string;
+  mode: "preparation" | "live";
+  status: "active" | "ended";
+  startedAt: string;
+  endedAt: string | null;
+}
+
+export interface StartSessionPayload {
+  sessionId: string;
+}
+
+export interface ChangeSessionModePayload {
+  mode: "preparation" | "live";
+}
+
 export interface NotificationItem {
   id: string;
   type: string;

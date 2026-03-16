@@ -226,6 +226,21 @@ model FogState {
   @@map("fog_states")
 }
 
+model Session {
+  id         String    @id
+  campaignId String    @map("campaign_id")
+  gmUserId   String    @map("gm_user_id")
+  mode       String    @default("preparation")
+  status     String    @default("active")
+  startedAt  DateTime  @map("started_at")
+  endedAt    DateTime? @map("ended_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@index([campaignId, status])
+  @@map("sessions")
+}
+
 model Notification {
   id          String    @id @default(uuid())
   userId      String    @map("user_id")

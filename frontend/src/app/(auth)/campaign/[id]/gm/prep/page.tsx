@@ -1,7 +1,10 @@
 "use client";
 
-import { use, useState } from "react";
+import { use, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useCampaign } from "@/hooks/use-campaign";
+import { useActiveSession } from "@/hooks/use-active-session";
+import { useStartSession } from "@/hooks/use-start-session";
 import { useCampaignPlayers } from "@/hooks/use-campaign-players";
 import { useCampaignAnnouncements } from "@/hooks/use-campaign-announcements";
 import { InvitationManager } from "@/components/features/campaigns/invitation-manager";
@@ -21,7 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, Megaphone, Archive, ShieldAlert, Users, Swords, ArrowLeft, Map, ChevronRight } from "lucide-react";
+import { AlertCircle, Megaphone, Archive, ShieldAlert, Users, Swords, ArrowLeft, Map, ChevronRight, Play, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { AppBreadcrumb } from "@/components/layout/app-breadcrumb";
 
@@ -64,9 +67,32 @@ export default function GmPrepPage({
     isLoading: isCharactersLoading,
   } = useCampaignCharacters(campaignId);
 
+  const {
+    session: activeSession,
+    isLoading: isSessionLoading,
+  } = useActiveSession(campaignId);
+  const startSession = useStartSession();
+  const router = useRouter();
+
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
 
   const isArchived = campaign?.status === "archived";
+
+  const handleLaunchSession = useCallback(() => {
+    const sessionId = crypto.randomUUID();
+    startSession.mutate(
+      { campaignId, sessionId },
+      {
+        onSuccess: () => {
+          router.push(`/campaign/${campaignId}/gm/session`);
+        },
+      }
+    );
+  }, [campaignId, startSession, router]);
+
+  const handleResumeSession = useCallback(() => {
+    router.push(`/campaign/${campaignId}/gm/session`);
+  }, [campaignId, router]);
   // TODO: Replace with actual subscription check when subscription system is implemented
   const isProUser = false;
 
@@ -118,6 +144,46 @@ export default function GmPrepPage({
             </Card>
           </Link>
         </div>
+
+        {/* Session Launch / Resume */}
+        {!isArchived && !isLoading && !isSessionLoading && (
+          <Card className="bg-surface-elevated">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Play className="h-5 w-5" />
+                Game Session
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {activeSession ? (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-text-secondary">
+                      Active session in <Badge variant="secondary">{activeSession.mode}</Badge> mode
+                    </p>
+                  </div>
+                  <Button onClick={handleResumeSession}>
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Resume Session
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-text-secondary">
+                    Launch a new game session to go live with your players.
+                  </p>
+                  <Button
+                    onClick={handleLaunchSession}
+                    disabled={startSession.isPending}
+                  >
+                    <Play className="mr-2 h-4 w-4" />
+                    Launch Session
+                  </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         {/* Read-Only Banner for Archived Campaigns */}
         {isArchived && (

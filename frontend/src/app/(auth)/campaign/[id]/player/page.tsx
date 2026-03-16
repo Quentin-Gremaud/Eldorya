@@ -7,11 +7,13 @@ import { useCampaign } from "@/hooks/use-campaign";
 import { useCampaignAnnouncements } from "@/hooks/use-campaign-announcements";
 import { useMyCharacter } from "@/hooks/use-my-character";
 import { useMapLevels } from "@/hooks/use-map-levels";
+import { useActiveSession } from "@/hooks/use-active-session";
+import { useSessionNotification } from "@/hooks/use-session-notification";
 import { AnnouncementList } from "@/components/features/campaigns/announcement-list";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Calendar, User, Map, BookOpen, Backpack, Megaphone, AlertCircle, ChevronRight, ArrowLeft } from "lucide-react";
+import { Users, Calendar, User, Map, BookOpen, Backpack, Megaphone, AlertCircle, ChevronRight, ArrowLeft, Play, Clock } from "lucide-react";
 import { formatRelativeDate } from "@/lib/utils";
 import { AppBreadcrumb } from "@/components/layout/app-breadcrumb";
 import { Button } from "@/components/ui/button";
@@ -30,7 +32,13 @@ export function PlayerCampaignContent({
   } = useCampaignAnnouncements(campaignId);
   const { character, isLoading: isCharacterLoading } = useMyCharacter(campaignId);
   const { mapLevels, isLoading: isMapLevelsLoading } = useMapLevels(campaignId);
+  const { session: activeSession, isLoading: isSessionLoading } = useActiveSession(campaignId);
+  const { isSessionLive } = useSessionNotification(campaignId);
   const router = useRouter();
+
+  // Derive live state: either from WS notification or from fetched session
+  const sessionIsLive = isSessionLive || activeSession?.mode === "live";
+  const sessionIsPrep = !sessionIsLive && activeSession != null;
 
   useEffect(() => {
     if (isError) {
@@ -104,6 +112,40 @@ export function PlayerCampaignContent({
 
         {campaign.description && (
           <p className="text-sm text-text-secondary">{campaign.description}</p>
+        )}
+
+        {/* Session Banner */}
+        {!isSessionLoading && activeSession && (
+          <Card className={sessionIsLive ? "border-green-600/50 bg-green-600/10" : "bg-surface-elevated"}>
+            <CardContent className="flex items-center justify-between py-4">
+              {sessionIsLive ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-green-600">LIVE</Badge>
+                    <span className="text-sm font-medium text-text-primary">
+                      A session is live!
+                    </span>
+                  </div>
+                  <Button asChild>
+                    <Link href={`/campaign/${campaignId}/player/session`}>
+                      <Play className="mr-2 h-4 w-4" />
+                      Join Session
+                    </Link>
+                  </Button>
+                </>
+              ) : sessionIsPrep ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-text-muted" />
+                    <span className="text-sm text-text-secondary">
+                      GM is preparing the session…
+                    </span>
+                  </div>
+                  <Badge variant="secondary">Preparing</Badge>
+                </>
+              ) : null}
+            </CardContent>
+          </Card>
         )}
 
         {/* Announcements Section */}

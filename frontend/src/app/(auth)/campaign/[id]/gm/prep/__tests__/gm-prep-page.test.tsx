@@ -90,6 +90,17 @@ jest.mock("@/hooks/use-reactivate-campaign", () => ({
   useReactivateCampaign: () => ({ mutate: jest.fn(), isPending: false }),
 }));
 
+const mockUseActiveSession = jest.fn();
+const mockUseStartSession = jest.fn();
+
+jest.mock("@/hooks/use-active-session", () => ({
+  useActiveSession: (...args: unknown[]) => mockUseActiveSession(...args),
+}));
+
+jest.mock("@/hooks/use-start-session", () => ({
+  useStartSession: () => mockUseStartSession(),
+}));
+
 jest.mock("@/lib/utils", () => ({
   ...jest.requireActual("@/lib/utils"),
   formatRelativeDate: () => "2 days ago",
@@ -192,6 +203,17 @@ describe("GmPrepPage", () => {
       characters: [],
       isLoading: false,
       isError: false,
+    });
+
+    mockUseActiveSession.mockReturnValue({
+      session: null,
+      isLoading: false,
+      isError: false,
+    });
+
+    mockUseStartSession.mockReturnValue({
+      mutate: jest.fn(),
+      isPending: false,
     });
   });
 
@@ -397,5 +419,56 @@ describe("GmPrepPage", () => {
     ).toBeInTheDocument();
     // Player list and readiness indicator should NOT be rendered
     expect(screen.queryByText("No players yet")).toBeNull();
+  });
+
+  it("renders Launch Session button when no active session", () => {
+    mockUseActiveSession.mockReturnValue({
+      session: null,
+      isLoading: false,
+      isError: false,
+    });
+
+    render(
+      <GmPrepPage params={Promise.resolve({ id: "campaign-123" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    expect(screen.getByText("Game Session")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Launch Session/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Resume Session/i })).not.toBeInTheDocument();
+  });
+
+  it("renders Resume Session button when active session exists", () => {
+    mockUseActiveSession.mockReturnValue({
+      session: { id: "session-1", campaignId: "campaign-123", mode: "preparation" },
+      isLoading: false,
+      isError: false,
+    });
+
+    render(
+      <GmPrepPage params={Promise.resolve({ id: "campaign-123" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    expect(screen.getByText("Game Session")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Resume Session/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Launch Session/i })).not.toBeInTheDocument();
+  });
+
+  it("does not show session card for archived campaigns", () => {
+    mockUseCampaign.mockReturnValue({
+      campaign: { name: "Archived Campaign", status: "archived" },
+      isLoading: false,
+      isError: false,
+    });
+
+    render(
+      <GmPrepPage params={Promise.resolve({ id: "campaign-123" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    expect(screen.queryByText("Game Session")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Launch Session/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Resume Session/i })).not.toBeInTheDocument();
   });
 });
