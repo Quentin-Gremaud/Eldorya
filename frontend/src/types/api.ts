@@ -348,6 +348,37 @@ export interface ChangeSessionModePayload {
   mode: "preparation" | "live";
 }
 
+// Action Pipeline types
+export type ActionType = "move" | "attack" | "interact" | "free-text";
+
+export interface PendingAction {
+  id: string;
+  sessionId: string;
+  campaignId: string;
+  playerId: string;
+  actionType: ActionType;
+  description: string;
+  target: string | null;
+  status: "pending";
+  proposedAt: string;
+}
+
+export interface PingStatus {
+  playerId: string;
+  pingedAt: string;
+}
+
+export interface PingPlayerPayload {
+  playerId: string;
+}
+
+export interface ProposeActionPayload {
+  actionId: string;
+  actionType: ActionType;
+  description: string;
+  target?: string;
+}
+
 export interface NotificationItem {
   id: string;
   type: string;

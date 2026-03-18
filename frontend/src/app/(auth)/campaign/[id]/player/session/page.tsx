@@ -18,6 +18,8 @@ import { ArrowLeft, Clock } from "lucide-react";
 import Link from "next/link";
 import { AppBreadcrumb } from "@/components/layout/app-breadcrumb";
 import { useState } from "react";
+import { PingNotification } from "@/components/features/action-pipeline/ping-notification";
+import { ActionSubmissionPanel } from "@/components/features/action-pipeline/action-submission-panel";
 
 export default function PlayerSessionPage({
   params,
@@ -114,6 +116,9 @@ export default function PlayerSessionPage({
           </div>
         </div>
 
+        {/* Ping Notification */}
+        {isLive && <PingNotification campaignId={campaignId} />}
+
         {/* GM Preparing Indicator */}
         {!isLive && (
           <div className="flex items-center justify-center rounded-lg border border-border p-12">
@@ -159,6 +164,14 @@ export default function PlayerSessionPage({
             <p className="text-text-secondary">No map levels available.</p>
           </div>
         ) : null}
+
+        {/* Action Submission (live only) */}
+        {isLive && (
+          <ActionSubmissionPanel
+            campaignId={campaignId}
+            sessionId={session.id}
+          />
+        )}
       </div>
     </main>
   );

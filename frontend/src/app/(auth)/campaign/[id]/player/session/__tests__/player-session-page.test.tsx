@@ -82,6 +82,18 @@ jest.mock("@/providers/web-socket-provider", () => ({
   }),
 }));
 
+jest.mock("@/hooks/use-ping-notification", () => ({
+  usePingNotification: () => ({ isPinged: false, clearPing: jest.fn() }),
+}));
+
+jest.mock("@/hooks/use-propose-action", () => ({
+  useProposeAction: () => ({ mutate: jest.fn(), isPending: false }),
+}));
+
+jest.mock("@/hooks/use-action-pipeline-web-socket", () => ({
+  useActionPipelineWebSocket: jest.fn(),
+}));
+
 jest.mock("@/components/canvas/map-canvas", () => ({
   MapCanvas: () =>
     createElement("div", { "data-testid": "map-canvas" }, "MapCanvas"),

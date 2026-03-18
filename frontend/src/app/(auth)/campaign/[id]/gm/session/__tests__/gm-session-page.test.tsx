@@ -46,6 +46,33 @@ jest.mock("@/hooks/use-campaign", () => ({
   useCampaign: () => mockUseCampaign(),
 }));
 
+jest.mock("@/hooks/use-campaign-players", () => ({
+  useCampaignPlayers: () => ({
+    players: [],
+    hasActiveInvitation: false,
+    allReady: false,
+    playerCount: 0,
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
+jest.mock("@/hooks/use-pending-actions", () => ({
+  usePendingActions: () => ({ actions: [] }),
+}));
+
+jest.mock("@/hooks/use-ping-status", () => ({
+  usePingStatus: () => ({ pingStatus: null }),
+}));
+
+jest.mock("@/hooks/use-ping-player", () => ({
+  usePingPlayer: () => ({ mutate: jest.fn(), isPending: false }),
+}));
+
+jest.mock("@/hooks/use-action-pipeline-web-socket", () => ({
+  useActionPipelineWebSocket: jest.fn(),
+}));
+
 jest.mock("@/components/canvas/map-canvas", () => ({
   MapCanvas: () => createElement("div", { "data-testid": "map-canvas" }, "Mocked MapCanvas"),
 }));

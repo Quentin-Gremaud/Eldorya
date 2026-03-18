@@ -7,6 +7,7 @@ describe('SessionGateway - join-session', () => {
   let gateway: SessionGateway;
   let roomManager: RoomManagerService;
   let mockSessionFinder: { findActiveSessionByCampaign: jest.Mock; findById: jest.Mock };
+  let mockPrisma: { campaignMember: { findFirst: jest.Mock } };
   let mockClient: AuthenticatedSocket;
 
   const sessionId = '550e8400-e29b-41d4-a716-446655440000';
@@ -22,10 +23,18 @@ describe('SessionGateway - join-session', () => {
       findById: jest.fn(),
     };
 
+    mockPrisma = {
+      campaignMember: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'member-1', campaignId, userId: playerId, role: 'player' }),
+      },
+    };
+
     gateway = new SessionGateway(
       {} as any,
       roomManager,
       mockSessionFinder as unknown as SessionFinder,
+      { execute: jest.fn() } as any,
+      mockPrisma as any,
     );
 
     mockClient = {
@@ -95,6 +104,25 @@ describe('SessionGateway - join-session', () => {
     const result = await gateway.handleJoinSession(mockClient, { sessionId, campaignId });
 
     expect(result).toEqual({ success: false, error: 'Session not found or not active' });
+  });
+
+  it('should reject non-member player from joining', async () => {
+    mockSessionFinder.findActiveSessionByCampaign.mockResolvedValue({
+      id: sessionId,
+      campaignId,
+      gmUserId,
+      mode: 'live',
+      status: 'active',
+      startedAt: '2026-03-14T10:00:00.000Z',
+      endedAt: null,
+    });
+
+    mockPrisma.campaignMember.findFirst.mockResolvedValue(null);
+
+    const result = await gateway.handleJoinSession(mockClient, { sessionId, campaignId });
+
+    expect(result).toEqual({ success: false, error: 'Not a campaign member' });
+    expect(mockClient.join).not.toHaveBeenCalled();
   });
 
   it('should reject join when session ID does not match', async () => {

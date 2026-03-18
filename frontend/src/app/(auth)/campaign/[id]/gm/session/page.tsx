@@ -28,6 +28,9 @@ import { ArrowLeft, Play, Pause } from "lucide-react";
 import Link from "next/link";
 import { AppBreadcrumb } from "@/components/layout/app-breadcrumb";
 import { useEffect } from "react";
+import { useCampaignPlayers } from "@/hooks/use-campaign-players";
+import { PlayerPingPanel } from "@/components/features/action-pipeline/player-ping-panel";
+import { PendingActionQueue } from "@/components/features/action-pipeline/pending-action-queue";
 
 export default function GmSessionCockpitPage({
   params,
@@ -40,6 +43,7 @@ export default function GmSessionCockpitPage({
   const { session, isLoading: isSessionLoading } = useActiveSession(campaignId);
   const changeMode = useChangeSessionMode();
   const { mapLevels } = useMapLevels(campaignId);
+  const { players } = useCampaignPlayers(campaignId);
 
   const [selectedMapLevelId, setSelectedMapLevelId] = useState<string | null>(null);
   const [goLiveDialogOpen, setGoLiveDialogOpen] = useState(false);
@@ -184,24 +188,49 @@ export default function GmSessionCockpitPage({
           </div>
         )}
 
-        {/* Map Canvas */}
-        {selectedMapLevel ? (
-          <div className="rounded-lg border border-border overflow-hidden" style={{ height: "70vh" }}>
-            <MapCanvas
-              mapLevel={selectedMapLevel}
-              tokens={tokens}
-              interactive={true}
-              viewMode="gm"
-              fogZones={fogZones}
-              mapLevels={mapLevels}
-              onTokenMove={handleTokenMove}
-            />
+        {/* Map + Side Panel */}
+        <div className="flex gap-4">
+          {/* Map Canvas */}
+          <div className="flex-1 min-w-0">
+            {selectedMapLevel ? (
+              <div className="relative rounded-lg border border-border overflow-hidden" style={{ height: "70vh" }}>
+                <MapCanvas
+                  mapLevel={selectedMapLevel}
+                  tokens={tokens}
+                  interactive={true}
+                  viewMode="gm"
+                  fogZones={fogZones}
+                  mapLevels={mapLevels}
+                  onTokenMove={handleTokenMove}
+                />
+                {isLive && (
+                  <PendingActionQueue
+                    campaignId={campaignId}
+                    sessionId={session.id}
+                  />
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center rounded-lg border border-border p-12">
+                <p className="text-text-secondary">No map levels available. Create maps in the prep page first.</p>
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="flex items-center justify-center rounded-lg border border-border p-12">
-            <p className="text-text-secondary">No map levels available. Create maps in the prep page first.</p>
-          </div>
-        )}
+
+          {/* GM Side Panel (live only) */}
+          {isLive && (
+            <div className="w-64 shrink-0 rounded-lg border border-border bg-surface p-4">
+              <PlayerPingPanel
+                campaignId={campaignId}
+                sessionId={session.id}
+                players={players.map((p) => ({
+                  userId: p.userId,
+                  displayName: p.displayName,
+                }))}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Go Live Confirmation Dialog */}

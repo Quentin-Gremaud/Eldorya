@@ -7,11 +7,18 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
+import { CommandBus } from '@nestjs/cqrs';
 import { Server } from 'socket.io';
 import { ClerkTokenVerifierService } from '../infrastructure/auth/clerk-token-verifier.service.js';
+import { PrismaService } from '../infrastructure/database/prisma.service.js';
 import { AuthenticatedSocket } from './types/authenticated-socket.js';
 import { RoomManagerService } from './services/room-manager.service.js';
 import { SessionFinder } from '../presentation/session/finders/session.finder.js';
+import { PingPlayerCommand } from '../session/action-pipeline/commands/ping-player.command.js';
+import { ProposeActionCommand } from '../session/action-pipeline/commands/propose-action.command.js';
+
+const ALLOWED_ACTION_TYPES = ['move', 'attack', 'interact', 'free-text'] as const;
+const MAX_DESCRIPTION_LENGTH = 500;
 
 @WebSocketGateway({
   cors: {
@@ -31,7 +38,16 @@ export class SessionGateway
     private readonly tokenVerifier: ClerkTokenVerifierService,
     private readonly roomManager: RoomManagerService,
     private readonly sessionFinder: SessionFinder,
+    private readonly commandBus: CommandBus,
+    private readonly prisma: PrismaService,
   ) {}
+
+  private async isCampaignMember(campaignId: string, userId: string): Promise<boolean> {
+    const member = await this.prisma.campaignMember.findFirst({
+      where: { campaignId, userId },
+    });
+    return member !== null;
+  }
 
   afterInit() {
     // Socket.io middleware uses next() callback, async is safe here
@@ -76,6 +92,13 @@ export class SessionGateway
   ): Promise<{ success: boolean; error?: string }> {
     const { sessionId, campaignId } = payload;
 
+    if (!sessionId || typeof sessionId !== 'string') {
+      return { success: false, error: 'Invalid sessionId' };
+    }
+    if (!campaignId || typeof campaignId !== 'string') {
+      return { success: false, error: 'Invalid campaignId' };
+    }
+
     const session = await this.sessionFinder.findActiveSessionByCampaign(campaignId);
     if (!session || session.id !== sessionId) {
       return { success: false, error: 'Session not found or not active' };
@@ -87,6 +110,12 @@ export class SessionGateway
       return { success: true };
     }
 
+    // C-4: Verify caller is a campaign member
+    const isMember = await this.isCampaignMember(campaignId, client.userId);
+    if (!isMember) {
+      return { success: false, error: 'Not a campaign member' };
+    }
+
     // Players can only join when session is live
     if (session.mode !== 'live') {
       return { success: false, error: 'Session is not in live mode' };
@@ -94,5 +123,107 @@ export class SessionGateway
 
     await this.roomManager.joinRoom(client, sessionId);
     return { success: true };
+  }
+
+  @SubscribeMessage('ping-player')
+  async handlePingPlayer(
+    client: AuthenticatedSocket,
+    payload: { sessionId: string; campaignId: string; playerId: string },
+  ): Promise<{ success: boolean; error?: string }> {
+    const { sessionId, campaignId, playerId } = payload;
+
+    if (!sessionId || typeof sessionId !== 'string') {
+      return { success: false, error: 'Invalid sessionId' };
+    }
+    if (!campaignId || typeof campaignId !== 'string') {
+      return { success: false, error: 'Invalid campaignId' };
+    }
+    if (!playerId || typeof playerId !== 'string') {
+      return { success: false, error: 'Invalid playerId' };
+    }
+
+    const session = await this.sessionFinder.findById(sessionId);
+    if (!session || session.campaignId !== campaignId) {
+      return { success: false, error: 'Session not found' };
+    }
+    if (session.gmUserId !== client.userId) {
+      return { success: false, error: 'Only the GM can ping players' };
+    }
+    if (session.mode !== 'live') {
+      return { success: false, error: 'Session is not in live mode' };
+    }
+
+    try {
+      await this.commandBus.execute(
+        new PingPlayerCommand(sessionId, campaignId, client.userId, playerId),
+      );
+      return { success: true };
+    } catch (err) {
+      this.logger.error(`Failed to ping player: ${err instanceof Error ? err.message : String(err)}`);
+      return { success: false, error: 'Failed to ping player' };
+    }
+  }
+
+  @SubscribeMessage('propose-action')
+  async handleProposeAction(
+    client: AuthenticatedSocket,
+    payload: {
+      sessionId: string;
+      campaignId: string;
+      actionId: string;
+      actionType: string;
+      description: string;
+      target?: string;
+    },
+  ): Promise<{ success: boolean; error?: string }> {
+    const { sessionId, campaignId, actionId, actionType, description, target } = payload;
+
+    if (!sessionId || typeof sessionId !== 'string') {
+      return { success: false, error: 'Invalid sessionId' };
+    }
+    if (!campaignId || typeof campaignId !== 'string') {
+      return { success: false, error: 'Invalid campaignId' };
+    }
+    if (!actionId || typeof actionId !== 'string') {
+      return { success: false, error: 'Invalid actionId' };
+    }
+    if (!actionType || !ALLOWED_ACTION_TYPES.includes(actionType as (typeof ALLOWED_ACTION_TYPES)[number])) {
+      return { success: false, error: 'Invalid actionType' };
+    }
+    if (!description || typeof description !== 'string' || description.length > MAX_DESCRIPTION_LENGTH) {
+      return { success: false, error: 'Invalid description' };
+    }
+
+    const session = await this.sessionFinder.findById(sessionId);
+    if (!session || session.campaignId !== campaignId) {
+      return { success: false, error: 'Session not found' };
+    }
+    if (session.mode !== 'live') {
+      return { success: false, error: 'Session is not in live mode' };
+    }
+
+    // C-3: Verify caller is a campaign member
+    const isMember = await this.isCampaignMember(campaignId, client.userId);
+    if (!isMember) {
+      return { success: false, error: 'Not a campaign member' };
+    }
+
+    try {
+      await this.commandBus.execute(
+        new ProposeActionCommand(
+          actionId,
+          sessionId,
+          campaignId,
+          client.userId,
+          actionType,
+          description,
+          target ?? null,
+        ),
+      );
+      return { success: true };
+    } catch (err) {
+      this.logger.error(`Failed to propose action: ${err instanceof Error ? err.message : String(err)}`);
+      return { success: false, error: 'Failed to propose action' };
+    }
   }
 }
