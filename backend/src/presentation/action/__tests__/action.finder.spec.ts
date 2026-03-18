@@ -44,7 +44,7 @@ describe('ActionFinder', () => {
       expect(result[0].proposedAt).toBe(proposedAt.toISOString());
       expect(mockPrisma.sessionAction.findMany).toHaveBeenCalledWith({
         where: { sessionId, campaignId, status: 'pending' },
-        orderBy: { proposedAt: 'asc' },
+        orderBy: { queuePosition: 'asc' },
       });
     });
 

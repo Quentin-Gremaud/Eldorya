@@ -185,4 +185,87 @@ describe('SessionGateway WS handlers', () => {
       expect(result).toEqual({ success: false, error: 'Invalid actionId' });
     });
   });
+
+  describe('reorder-action-queue', () => {
+    const actionId1 = '770e8400-e29b-41d4-a716-446655440002';
+    const actionId2 = '770e8400-e29b-41d4-a716-446655440003';
+
+    it('should dispatch ReorderActionQueueCommand for valid request', async () => {
+      const result = await gateway.handleReorderActionQueue(gmClient, {
+        sessionId,
+        campaignId,
+        orderedActionIds: [actionId2, actionId1],
+      });
+
+      expect(result).toEqual({ success: true });
+      expect(mockCommandBus.execute).toHaveBeenCalledTimes(1);
+    });
+
+    it('should reject non-GM caller', async () => {
+      const result = await gateway.handleReorderActionQueue(nonGmClient, {
+        sessionId,
+        campaignId,
+        orderedActionIds: [actionId1],
+      });
+
+      expect(result).toEqual({ success: false, error: 'Only the GM can reorder the action queue' });
+      expect(mockCommandBus.execute).not.toHaveBeenCalled();
+    });
+
+    it('should reject empty orderedActionIds array', async () => {
+      const result = await gateway.handleReorderActionQueue(gmClient, {
+        sessionId,
+        campaignId,
+        orderedActionIds: [],
+      });
+
+      expect(result).toEqual({ success: false, error: 'orderedActionIds must be a non-empty array' });
+    });
+
+    it('should reject non-array orderedActionIds', async () => {
+      const result = await gateway.handleReorderActionQueue(gmClient, {
+        sessionId,
+        campaignId,
+        orderedActionIds: 'not-an-array' as any,
+      });
+
+      expect(result).toEqual({ success: false, error: 'orderedActionIds must be a non-empty array' });
+    });
+
+    it('should reject invalid UUID in orderedActionIds', async () => {
+      const result = await gateway.handleReorderActionQueue(gmClient, {
+        sessionId,
+        campaignId,
+        orderedActionIds: ['not-a-uuid'],
+      });
+
+      expect(result).toEqual({ success: false, error: 'All orderedActionIds must be valid UUIDs' });
+    });
+
+    it('should reject when exceeding max queue size', async () => {
+      const tooManyIds = Array.from({ length: 51 }, (_, i) =>
+        `${i.toString().padStart(8, '0')}-0000-0000-0000-000000000000`,
+      );
+
+      const result = await gateway.handleReorderActionQueue(gmClient, {
+        sessionId,
+        campaignId,
+        orderedActionIds: tooManyIds,
+      });
+
+      expect(result).toEqual({ success: false, error: 'orderedActionIds exceeds maximum of 50 items' });
+    });
+
+    it('should reject when session not in live mode', async () => {
+      mockSessionFinder.findById.mockResolvedValue({ ...liveSession, mode: 'preparation' });
+
+      const result = await gateway.handleReorderActionQueue(gmClient, {
+        sessionId,
+        campaignId,
+        orderedActionIds: [actionId1],
+      });
+
+      expect(result).toEqual({ success: false, error: 'Session is not in live mode' });
+    });
+  });
 });

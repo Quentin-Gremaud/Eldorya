@@ -206,9 +206,9 @@ describe("useActionPipelineWebSocket", () => {
       { wrapper: Wrapper }
     );
 
-    expect(mockSocket.on).toHaveBeenCalledTimes(6);
+    expect(mockSocket.on).toHaveBeenCalledTimes(7);
     unmount();
-    expect(mockSocket.off).toHaveBeenCalledTimes(6);
+    expect(mockSocket.off).toHaveBeenCalledTimes(7);
   });
 
   it("should remove action from pending on ActionValidated event", () => {
@@ -335,5 +335,73 @@ describe("useActionPipelineWebSocket", () => {
     });
 
     expect(onActionRejected).toHaveBeenCalledWith("a1", "No");
+  });
+
+  it("should reorder pending actions on ActionQueueReordered event", () => {
+    const { queryClient, Wrapper } = createWrapper();
+    const a1: PendingAction = {
+      id: "a1", sessionId: "s1", campaignId: "c1", playerId: "p1",
+      actionType: "move", description: "Move", target: null,
+      status: "pending", proposedAt: "2026-03-18T10:00:00.000Z",
+    };
+    const a2: PendingAction = {
+      id: "a2", sessionId: "s1", campaignId: "c1", playerId: "p1",
+      actionType: "attack", description: "Attack", target: null,
+      status: "pending", proposedAt: "2026-03-18T10:01:00.000Z",
+    };
+    queryClient.setQueryData(["actions", "c1", "s1", "pending"], [a1, a2]);
+
+    renderHook(() => useActionPipelineWebSocket("c1", "s1"), {
+      wrapper: Wrapper,
+    });
+
+    act(() => {
+      emit("ActionQueueReordered", {
+        type: "ActionQueueReordered",
+        data: {
+          sessionId: "s1",
+          campaignId: "c1",
+          orderedActionIds: ["a2", "a1"],
+        },
+      });
+    });
+
+    const actions = queryClient.getQueryData<PendingAction[]>([
+      "actions", "c1", "s1", "pending",
+    ]);
+    expect(actions).toHaveLength(2);
+    expect(actions?.[0].id).toBe("a2");
+    expect(actions?.[1].id).toBe("a1");
+  });
+
+  it("should ignore ActionQueueReordered for different campaigns", () => {
+    const { queryClient, Wrapper } = createWrapper();
+    const a1: PendingAction = {
+      id: "a1", sessionId: "s1", campaignId: "c1", playerId: "p1",
+      actionType: "move", description: "Move", target: null,
+      status: "pending", proposedAt: "2026-03-18T10:00:00.000Z",
+    };
+    queryClient.setQueryData(["actions", "c1", "s1", "pending"], [a1]);
+
+    renderHook(() => useActionPipelineWebSocket("c1", "s1"), {
+      wrapper: Wrapper,
+    });
+
+    act(() => {
+      emit("ActionQueueReordered", {
+        type: "ActionQueueReordered",
+        data: {
+          sessionId: "s2",
+          campaignId: "c2",
+          orderedActionIds: ["a1"],
+        },
+      });
+    });
+
+    const actions = queryClient.getQueryData<PendingAction[]>([
+      "actions", "c1", "s1", "pending",
+    ]);
+    expect(actions).toHaveLength(1);
+    expect(actions?.[0].id).toBe("a1");
   });
 });

@@ -47,7 +47,7 @@ export class ActionProjection implements OnModuleInit, OnModuleDestroy {
 
       const subscription = client.subscribeToAll({
         fromPosition,
-        filter: eventTypeFilter({ prefixes: ['PlayerPinged', 'ActionProposed', 'ActionValidated', 'ActionRejected'] }),
+        filter: eventTypeFilter({ prefixes: ['PlayerPinged', 'ActionProposed', 'ActionValidated', 'ActionRejected', 'ActionQueueReordered'] }),
       });
 
       this.logger.log(
@@ -70,6 +70,8 @@ export class ActionProjection implements OnModuleInit, OnModuleDestroy {
             await this.handleActionValidated(data);
           } else if (eventType === 'ActionRejected') {
             await this.handleActionRejected(data);
+          } else if (eventType === 'ActionQueueReordered') {
+            await this.handleActionQueueReordered(data);
           }
 
           const position = resolvedEvent.event?.position;
@@ -148,6 +150,12 @@ export class ActionProjection implements OnModuleInit, OnModuleDestroy {
     const target = typeof data.target === 'string' ? data.target : null;
     const proposedAt = this.requireString(data, 'proposedAt', 'ActionProposed');
 
+    const maxPosition = await this.prisma.sessionAction.aggregate({
+      where: { sessionId, campaignId, status: 'pending' },
+      _max: { queuePosition: true },
+    });
+    const nextPosition = (maxPosition._max.queuePosition ?? -1) + 1;
+
     await this.prisma.sessionAction.createMany({
       data: [
         {
@@ -159,6 +167,7 @@ export class ActionProjection implements OnModuleInit, OnModuleDestroy {
           description,
           target,
           status: 'pending',
+          queuePosition: nextPosition,
           proposedAt: new Date(proposedAt),
         },
       ],
@@ -204,5 +213,26 @@ export class ActionProjection implements OnModuleInit, OnModuleDestroy {
     });
 
     this.logger.log(`Action ${actionId} rejected`);
+  }
+
+  async handleActionQueueReordered(data: Record<string, unknown>): Promise<void> {
+    const campaignId = this.requireString(data, 'campaignId', 'ActionQueueReordered');
+    const orderedActionIds = data.orderedActionIds;
+    if (!Array.isArray(orderedActionIds)) {
+      throw new Error('Invalid event data: "orderedActionIds" must be an array in ActionQueueReordered');
+    }
+
+    await this.prisma.$transaction(
+      orderedActionIds.map((actionId: string, i: number) =>
+        this.prisma.sessionAction.updateMany({
+          where: { id: actionId, campaignId, status: 'pending' },
+          data: { queuePosition: i },
+        }),
+      ),
+    );
+
+    this.logger.log(
+      `Action queue reordered: ${orderedActionIds.length} actions updated`,
+    );
   }
 }

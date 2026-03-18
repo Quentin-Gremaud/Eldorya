@@ -3,11 +3,13 @@ import { PlayerPinged } from '../events/player-pinged.event.js';
 import { ActionProposed } from '../events/action-proposed.event.js';
 import { ActionValidated } from '../events/action-validated.event.js';
 import { ActionRejected } from '../events/action-rejected.event.js';
+import { ActionQueueReordered } from '../events/action-queue-reordered.event.js';
 import { InvalidActionProposalException } from '../exceptions/invalid-action-proposal.exception.js';
 import { NotSessionGmException } from '../exceptions/not-session-gm.exception.js';
 import { ActionNotFoundException } from '../exceptions/action-not-found.exception.js';
 import { ActionNotPendingException } from '../exceptions/action-not-pending.exception.js';
 import { FeedbackRequiredException } from '../exceptions/feedback-required.exception.js';
+import { InvalidQueueReorderException } from '../exceptions/invalid-queue-reorder.exception.js';
 import type { Clock } from '../../../shared/clock.js';
 
 describe('ActionPipelineAggregate', () => {
@@ -720,6 +722,160 @@ describe('ActionPipelineAggregate', () => {
       expect(() =>
         aggregate.validateAction(actionId, gmUserId, gmUserId, null, clock),
       ).toThrow(ActionNotPendingException);
+    });
+  });
+
+  describe('reorderActionQueue', () => {
+    const actionId2 = '770e8400-e29b-41d4-a716-446655440003';
+    const actionId3 = '770e8400-e29b-41d4-a716-446655440004';
+
+    it('should emit an ActionQueueReordered event with new order', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      aggregate.proposeAction(actionId2, playerId, 'attack', 'I attack', null, clock);
+      aggregate.proposeAction(actionId3, playerId, 'interact', 'I interact', null, clock);
+      aggregate.clearEvents();
+
+      aggregate.reorderActionQueue([actionId3, actionId, actionId2], gmUserId, gmUserId, clock);
+
+      const events = aggregate.getUncommittedEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toBeInstanceOf(ActionQueueReordered);
+
+      const event = events[0] as ActionQueueReordered;
+      expect(event.sessionId).toBe(sessionId);
+      expect(event.campaignId).toBe(campaignId);
+      expect(event.orderedActionIds).toEqual([actionId3, actionId, actionId2]);
+      expect(event.gmUserId).toBe(gmUserId);
+      expect(event.reorderedAt).toBe(fixedDate.toISOString());
+    });
+
+    it('should update pendingActionIds order after reorder', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      aggregate.proposeAction(actionId2, playerId, 'attack', 'I attack', null, clock);
+
+      aggregate.reorderActionQueue([actionId2, actionId], gmUserId, gmUserId, clock);
+
+      expect(aggregate.getPendingActionIds()).toEqual([actionId2, actionId]);
+    });
+
+    it('should throw NotSessionGmException if caller is not GM', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move', null, clock);
+
+      expect(() =>
+        aggregate.reorderActionQueue([actionId], gmUserId, 'other-user', clock),
+      ).toThrow(NotSessionGmException);
+    });
+
+    it('should throw InvalidQueueReorderException for empty queue', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+
+      expect(() =>
+        aggregate.reorderActionQueue([], gmUserId, gmUserId, clock),
+      ).toThrow(InvalidQueueReorderException);
+    });
+
+    it('should throw InvalidQueueReorderException for mismatched action IDs (extra ID)', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move', null, clock);
+
+      expect(() =>
+        aggregate.reorderActionQueue([actionId, actionId2], gmUserId, gmUserId, clock),
+      ).toThrow(InvalidQueueReorderException);
+    });
+
+    it('should throw InvalidQueueReorderException for mismatched action IDs (wrong ID)', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move', null, clock);
+      aggregate.proposeAction(actionId2, playerId, 'attack', 'I attack', null, clock);
+
+      expect(() =>
+        aggregate.reorderActionQueue([actionId, actionId3], gmUserId, gmUserId, clock),
+      ).toThrow(InvalidQueueReorderException);
+    });
+
+    it('should throw InvalidQueueReorderException for incomplete list (missing ID)', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move', null, clock);
+      aggregate.proposeAction(actionId2, playerId, 'attack', 'I attack', null, clock);
+
+      expect(() =>
+        aggregate.reorderActionQueue([actionId], gmUserId, gmUserId, clock),
+      ).toThrow(InvalidQueueReorderException);
+    });
+
+    it('should allow propose after reorder and append at end', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move', null, clock);
+      aggregate.proposeAction(actionId2, playerId, 'attack', 'I attack', null, clock);
+      aggregate.reorderActionQueue([actionId2, actionId], gmUserId, gmUserId, clock);
+
+      aggregate.proposeAction(actionId3, playerId, 'interact', 'I interact', null, clock);
+
+      expect(aggregate.getPendingActionIds()).toEqual([actionId2, actionId, actionId3]);
+    });
+
+    it('should preserve remaining order after validate following reorder', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move', null, clock);
+      aggregate.proposeAction(actionId2, playerId, 'attack', 'I attack', null, clock);
+      aggregate.proposeAction(actionId3, playerId, 'interact', 'I interact', null, clock);
+      aggregate.reorderActionQueue([actionId3, actionId, actionId2], gmUserId, gmUserId, clock);
+
+      aggregate.validateAction(actionId, gmUserId, gmUserId, null, clock);
+
+      expect(aggregate.getPendingActionIds()).toEqual([actionId3, actionId2]);
+    });
+  });
+
+  describe('loadFromHistory with ActionQueueReordered', () => {
+    const actionId2 = '770e8400-e29b-41d4-a716-446655440003';
+
+    it('should reconstruct aggregate from ActionQueueReordered event', () => {
+      const events = [
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            playerId,
+            actionType: 'move',
+            description: 'I move',
+            target: null,
+            proposedAt: '2026-03-18T10:00:00.000Z',
+          },
+        },
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId: actionId2,
+            sessionId,
+            campaignId,
+            playerId,
+            actionType: 'attack',
+            description: 'I attack',
+            target: null,
+            proposedAt: '2026-03-18T10:01:00.000Z',
+          },
+        },
+        {
+          type: 'ActionQueueReordered',
+          data: {
+            sessionId,
+            campaignId,
+            orderedActionIds: [actionId2, actionId],
+            gmUserId,
+            reorderedAt: '2026-03-18T10:02:00.000Z',
+          },
+        },
+      ];
+
+      const aggregate = ActionPipelineAggregate.loadFromHistory(sessionId, events);
+
+      expect(aggregate.getPendingActionIds()).toEqual([actionId2, actionId]);
     });
   });
 

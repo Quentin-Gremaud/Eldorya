@@ -43,7 +43,7 @@ export class ActionFinder {
   ): Promise<PendingActionResult[]> {
     const actions = await this.prisma.sessionAction.findMany({
       where: { sessionId, campaignId, status: 'pending' },
-      orderBy: { proposedAt: 'asc' },
+      orderBy: { queuePosition: 'asc' },
     });
 
     return actions.map((a) => ({

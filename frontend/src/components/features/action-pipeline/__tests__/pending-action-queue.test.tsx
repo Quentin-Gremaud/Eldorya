@@ -43,6 +43,42 @@ jest.mock("@/hooks/use-reject-action", () => ({
   useRejectAction: jest.fn(() => ({ mutate: jest.fn() })),
 }));
 
+jest.mock("@/hooks/use-reorder-action-queue", () => ({
+  useReorderActionQueue: jest.fn(() => ({ mutate: jest.fn() })),
+}));
+
+jest.mock("@dnd-kit/core", () => ({
+  DndContext: ({ children }: { children: React.ReactNode }) => children,
+  closestCenter: jest.fn(),
+  KeyboardSensor: jest.fn(),
+  PointerSensor: jest.fn(),
+  useSensor: jest.fn(),
+  useSensors: jest.fn(() => []),
+}));
+
+jest.mock("@dnd-kit/sortable", () => ({
+  SortableContext: ({ children }: { children: React.ReactNode }) => children,
+  verticalListSortingStrategy: jest.fn(),
+  arrayMove: jest.fn((arr: unknown[], from: number, to: number) => {
+    const result = [...arr];
+    const [removed] = result.splice(from, 1);
+    result.splice(to, 0, removed);
+    return result;
+  }),
+  useSortable: () => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: jest.fn(),
+    transform: null,
+    transition: null,
+    isDragging: false,
+  }),
+}));
+
+jest.mock("@dnd-kit/utilities", () => ({
+  CSS: { Transform: { toString: () => null } },
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { usePendingActions } = require("@/hooks/use-pending-actions");
 

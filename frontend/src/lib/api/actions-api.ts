@@ -7,6 +7,7 @@ import type {
   ProposeActionPayload,
   ValidateActionPayload,
   RejectActionPayload,
+  ReorderActionQueuePayload,
 } from "@/types/api";
 
 type ApiFetch = <T>(path: string, options?: RequestInit) => Promise<T>;
@@ -76,6 +77,20 @@ export function createActionsApi(apiFetch: ApiFetch) {
         `/api/campaigns/${campaignId}/sessions/${sessionId}/actions/${actionId}/reject`,
         {
           method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      ),
+
+    reorderActionQueue: (
+      campaignId: string,
+      sessionId: string,
+      payload: ReorderActionQueuePayload
+    ) =>
+      apiFetch<void>(
+        `/api/campaigns/${campaignId}/sessions/${sessionId}/actions/reorder`,
+        {
+          method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }

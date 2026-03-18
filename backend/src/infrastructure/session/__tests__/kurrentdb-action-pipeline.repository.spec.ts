@@ -319,4 +319,77 @@ describe('KurrentDbActionPipelineRepository', () => {
       );
     });
   });
+
+  describe('ActionQueueReordered serialization', () => {
+    const actionId2 = '880e8400-e29b-41d4-a716-446655440003';
+
+    it('should serialize ActionQueueReordered event correctly', async () => {
+      const aggregate = ActionPipelineAggregate.loadFromHistory(sessionId, [
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId, sessionId, campaignId, playerId,
+            actionType: 'move', description: 'I move', target: null,
+            proposedAt: '2026-03-18T09:00:00.000Z',
+          },
+        },
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId: actionId2, sessionId, campaignId, playerId,
+            actionType: 'attack', description: 'I attack', target: null,
+            proposedAt: '2026-03-18T09:01:00.000Z',
+          },
+        },
+      ]);
+      aggregate.reorderActionQueue([actionId2, actionId], gmUserId, gmUserId, clock);
+
+      await repository.save(aggregate);
+
+      const events = mockKurrentDb.appendEventsToStream.mock.calls[0][1];
+      expect(events[0].eventType).toBe('ActionQueueReordered');
+      expect(events[0].data).toEqual({
+        sessionId,
+        campaignId,
+        orderedActionIds: [actionId2, actionId],
+        gmUserId,
+        reorderedAt: fixedDate.toISOString(),
+      });
+    });
+
+    it('should round-trip ActionQueueReordered through load', async () => {
+      mockKurrentDb.readStream.mockResolvedValue([
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId, sessionId, campaignId, playerId,
+            actionType: 'move', description: 'I move', target: null,
+            proposedAt: '2026-03-18T09:00:00.000Z',
+          },
+        },
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId: actionId2, sessionId, campaignId, playerId,
+            actionType: 'attack', description: 'I attack', target: null,
+            proposedAt: '2026-03-18T09:01:00.000Z',
+          },
+        },
+        {
+          type: 'ActionQueueReordered',
+          data: {
+            sessionId,
+            campaignId,
+            orderedActionIds: [actionId2, actionId],
+            gmUserId,
+            reorderedAt: '2026-03-18T10:00:00.000Z',
+          },
+        },
+      ]);
+
+      const aggregate = await repository.load(sessionId);
+
+      expect(aggregate.getPendingActionIds()).toEqual([actionId2, actionId]);
+    });
+  });
 });

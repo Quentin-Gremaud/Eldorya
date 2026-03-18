@@ -4,6 +4,7 @@ import { PingPlayerHandler } from './commands/ping-player.handler.js';
 import { ProposeActionHandler } from './commands/propose-action.handler.js';
 import { ValidateActionHandler } from './commands/validate-action.handler.js';
 import { RejectActionHandler } from './commands/reject-action.handler.js';
+import { ReorderActionQueueHandler } from './commands/reorder-action-queue.handler.js';
 import { ACTION_PIPELINE_REPOSITORY } from './action-pipeline.repository.js';
 import { KurrentDbActionPipelineRepository } from '../../infrastructure/session/kurrentdb-action-pipeline.repository.js';
 import { SystemClock, CLOCK } from '../../shared/clock.js';
@@ -19,6 +20,7 @@ import { PrismaCampaignMembershipChecker } from '../../infrastructure/session/ca
     ProposeActionHandler,
     ValidateActionHandler,
     RejectActionHandler,
+    ReorderActionQueueHandler,
     {
       provide: ACTION_PIPELINE_REPOSITORY,
       useClass: KurrentDbActionPipelineRepository,

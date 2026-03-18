@@ -2,6 +2,21 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { ActionCard } from "../action-card";
 import type { PendingAction } from "@/types/api";
 
+jest.mock("@dnd-kit/sortable", () => ({
+  useSortable: () => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: jest.fn(),
+    transform: null,
+    transition: null,
+    isDragging: false,
+  }),
+}));
+
+jest.mock("@dnd-kit/utilities", () => ({
+  CSS: { Transform: { toString: () => null } },
+}));
+
 function makeAction(overrides: Partial<PendingAction> = {}): PendingAction {
   return {
     id: "action-1",
@@ -228,6 +243,26 @@ describe("ActionCard", () => {
 
       fireEvent.click(screen.getByText("Cancel"));
       expect(screen.getByText("Validate")).toBeInTheDocument();
+    });
+  });
+
+  describe("drag handle", () => {
+    it("renders drag handle when isGm is true", () => {
+      render(<ActionCard action={makeAction()} isGm />);
+
+      expect(screen.getByLabelText("Drag to reorder action")).toBeInTheDocument();
+    });
+
+    it("does not render drag handle when isGm is false", () => {
+      render(<ActionCard action={makeAction()} />);
+
+      expect(screen.queryByLabelText("Drag to reorder action")).not.toBeInTheDocument();
+    });
+
+    it("does not render drag handle when isGm is undefined", () => {
+      render(<ActionCard action={makeAction()} isGm={false} />);
+
+      expect(screen.queryByLabelText("Drag to reorder action")).not.toBeInTheDocument();
     });
   });
 });

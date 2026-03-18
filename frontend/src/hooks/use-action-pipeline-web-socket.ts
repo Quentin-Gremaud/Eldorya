@@ -63,6 +63,15 @@ interface ActionRejectedPayload {
   };
 }
 
+interface ActionQueueReorderedPayload {
+  type: string;
+  data: {
+    sessionId: string;
+    campaignId: string;
+    orderedActionIds: string[];
+  };
+}
+
 interface ActionPipelineWebSocketOptions {
   onActionConfirmed?: (actionId: string) => void;
   onActionValidated?: (actionId: string, narrativeNote: string | null) => void;
@@ -148,6 +157,18 @@ export function useActionPipelineWebSocket(
       options?.onActionRejected?.(payload.data.actionId, payload.data.feedback);
     };
 
+    const handleActionQueueReordered = (payload: ActionQueueReorderedPayload) => {
+      if (payload.data.campaignId !== campaignId) return;
+
+      queryClient.setQueryData<PendingAction[]>(pendingKey, (old) => {
+        if (!old) return old;
+        const actionMap = new Map(old.map((a) => [a.id, a]));
+        return payload.data.orderedActionIds
+          .map((id) => actionMap.get(id))
+          .filter((a): a is PendingAction => a !== undefined);
+      });
+    };
+
     socket.on(WS_EVENTS.PlayerPinged, handlePlayerPinged);
     socket.on(WS_EVENTS.PlayerPingedGm, handlePlayerPingedGm);
     socket.on(WS_EVENTS.ActionProposed, handleActionProposed);
@@ -157,6 +178,7 @@ export function useActionPipelineWebSocket(
     );
     socket.on(WS_EVENTS.ActionValidated, handleActionValidated);
     socket.on(WS_EVENTS.ActionRejected, handleActionRejected);
+    socket.on(WS_EVENTS.ActionQueueReordered, handleActionQueueReordered);
 
     return () => {
       socket.off(WS_EVENTS.PlayerPinged, handlePlayerPinged);
@@ -168,6 +190,7 @@ export function useActionPipelineWebSocket(
       );
       socket.off(WS_EVENTS.ActionValidated, handleActionValidated);
       socket.off(WS_EVENTS.ActionRejected, handleActionRejected);
+      socket.off(WS_EVENTS.ActionQueueReordered, handleActionQueueReordered);
     };
   }, [socket, campaignId, sessionId, queryClient, options?.onActionConfirmed, options?.onActionValidated, options?.onActionRejected]);
 }

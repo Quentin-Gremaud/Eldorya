@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { PendingAction } from "@/types/api";
-import { Swords, Move, Hand, MessageSquare, Check, X, Zap } from "lucide-react";
+import { Swords, Move, Hand, MessageSquare, Check, X, Zap, GripVertical } from "lucide-react";
 
 const ACTION_TYPE_CONFIG = {
   move: { icon: Move, label: "Move", color: "bg-blue-500/10 text-blue-600" },
@@ -32,6 +34,19 @@ export function ActionCard({ action, isGm, onApprove, onReject, onRemove }: Acti
   const [cardState, setCardState] = useState<CardState>("default");
   const [narrativeNote, setNarrativeNote] = useState("");
   const [feedback, setFeedback] = useState("");
+
+  const isDragDisabled = cardState !== "default";
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: action.id,
+    disabled: isDragDisabled,
+  });
 
   useEffect(() => {
     if (cardState === "flash-approved" || cardState === "flash-rejected") {
@@ -70,13 +85,32 @@ export function ActionCard({ action, isGm, onApprove, onReject, onRemove }: Acti
         ? "ring-2 ring-red-500 bg-red-500/10 motion-safe:animate-pulse"
         : "";
 
+  const sortableStyle = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+    boxShadow: isDragging ? "0 4px 12px rgba(0,0,0,0.15)" : undefined,
+  };
+
   return (
     <div
+      ref={setNodeRef}
+      style={sortableStyle}
       className={`flex flex-col gap-2 rounded-lg border border-border bg-surface-secondary p-3 transition-all duration-300 ${flashClass}`}
       role="article"
       aria-label={`Action: ${action.description}`}
+      {...attributes}
     >
       <div className="flex items-start gap-3">
+        {isGm && (
+          <button
+            className="mt-1 cursor-grab touch-none text-text-muted hover:text-text-primary active:cursor-grabbing"
+            aria-label="Drag to reorder action"
+            {...listeners}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        )}
         <div className={`rounded-md p-1.5 ${config.color}`}>
           <Icon className="h-4 w-4" />
         </div>

@@ -18,11 +18,14 @@ import { PingPlayerCommand } from '../session/action-pipeline/commands/ping-play
 import { ProposeActionCommand } from '../session/action-pipeline/commands/propose-action.command.js';
 import { ValidateActionCommand } from '../session/action-pipeline/commands/validate-action.command.js';
 import { RejectActionCommand } from '../session/action-pipeline/commands/reject-action.command.js';
+import { ReorderActionQueueCommand } from '../session/action-pipeline/commands/reorder-action-queue.command.js';
 
 const ALLOWED_ACTION_TYPES = ['move', 'attack', 'interact', 'free-text'] as const;
 const MAX_DESCRIPTION_LENGTH = 500;
 const MAX_NARRATIVE_NOTE_LENGTH = 1000;
 const MAX_FEEDBACK_LENGTH = 1000;
+const MAX_REORDER_QUEUE_SIZE = 50;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 @WebSocketGateway({
   cors: {
@@ -339,6 +342,60 @@ export class SessionGateway
     } catch (err) {
       this.logger.error(`Failed to reject action: ${err instanceof Error ? err.message : String(err)}`);
       return { success: false, error: 'Failed to reject action' };
+    }
+  }
+
+  @SubscribeMessage('reorder-action-queue')
+  async handleReorderActionQueue(
+    client: AuthenticatedSocket,
+    payload: {
+      sessionId: string;
+      campaignId: string;
+      orderedActionIds: string[];
+    },
+  ): Promise<{ success: boolean; error?: string }> {
+    const { sessionId, campaignId, orderedActionIds } = payload;
+
+    if (!sessionId || typeof sessionId !== 'string') {
+      return { success: false, error: 'Invalid sessionId' };
+    }
+    if (!campaignId || typeof campaignId !== 'string') {
+      return { success: false, error: 'Invalid campaignId' };
+    }
+    if (!Array.isArray(orderedActionIds) || orderedActionIds.length === 0) {
+      return { success: false, error: 'orderedActionIds must be a non-empty array' };
+    }
+    if (orderedActionIds.length > MAX_REORDER_QUEUE_SIZE) {
+      return { success: false, error: `orderedActionIds exceeds maximum of ${MAX_REORDER_QUEUE_SIZE} items` };
+    }
+    if (!orderedActionIds.every((id) => typeof id === 'string' && UUID_REGEX.test(id))) {
+      return { success: false, error: 'All orderedActionIds must be valid UUIDs' };
+    }
+
+    const session = await this.sessionFinder.findById(sessionId);
+    if (!session || session.campaignId !== campaignId) {
+      return { success: false, error: 'Session not found' };
+    }
+    if (session.gmUserId !== client.userId) {
+      return { success: false, error: 'Only the GM can reorder the action queue' };
+    }
+    if (session.mode !== 'live') {
+      return { success: false, error: 'Session is not in live mode' };
+    }
+
+    try {
+      await this.commandBus.execute(
+        new ReorderActionQueueCommand(
+          sessionId,
+          campaignId,
+          orderedActionIds,
+          client.userId,
+        ),
+      );
+      return { success: true };
+    } catch (err) {
+      this.logger.error(`Failed to reorder action queue: ${err instanceof Error ? err.message : String(err)}`);
+      return { success: false, error: 'Failed to reorder action queue' };
     }
   }
 }

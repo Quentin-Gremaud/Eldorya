@@ -4,8 +4,9 @@ describe('ActionProjection', () => {
   let projection: ActionProjection;
   let mockPrisma: {
     sessionPing: { create: jest.Mock };
-    sessionAction: { createMany: jest.Mock; updateMany: jest.Mock };
+    sessionAction: { createMany: jest.Mock; updateMany: jest.Mock; aggregate: jest.Mock };
     projectionCheckpoint: { findUnique: jest.Mock; upsert: jest.Mock };
+    $transaction: jest.Mock;
   };
 
   const sessionId = '550e8400-e29b-41d4-a716-446655440000';
@@ -17,11 +18,16 @@ describe('ActionProjection', () => {
   beforeEach(() => {
     mockPrisma = {
       sessionPing: { create: jest.fn().mockResolvedValue({}) },
-      sessionAction: { createMany: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({}) },
+      sessionAction: {
+        createMany: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({}),
+        aggregate: jest.fn().mockResolvedValue({ _max: { queuePosition: null } }),
+      },
       projectionCheckpoint: {
         findUnique: jest.fn().mockResolvedValue(null),
         upsert: jest.fn().mockResolvedValue({}),
       },
+      $transaction: jest.fn().mockResolvedValue([]),
     };
 
     projection = new ActionProjection(
@@ -71,6 +77,10 @@ describe('ActionProjection', () => {
         proposedAt: '2026-03-18T10:05:00.000Z',
       });
 
+      expect(mockPrisma.sessionAction.aggregate).toHaveBeenCalledWith({
+        where: { sessionId, campaignId, status: 'pending' },
+        _max: { queuePosition: true },
+      });
       expect(mockPrisma.sessionAction.createMany).toHaveBeenCalledWith({
         data: [
           {
@@ -82,6 +92,7 @@ describe('ActionProjection', () => {
             description: 'I move north',
             target: null,
             status: 'pending',
+            queuePosition: 0,
             proposedAt: new Date('2026-03-18T10:05:00.000Z'),
           },
         ],
@@ -103,6 +114,24 @@ describe('ActionProjection', () => {
 
       const data = mockPrisma.sessionAction.createMany.mock.calls[0][0].data[0];
       expect(data.target).toBe('token-goblin-1');
+    });
+
+    it('should set queuePosition to MAX+1 when existing pending actions', async () => {
+      mockPrisma.sessionAction.aggregate.mockResolvedValue({ _max: { queuePosition: 2 } });
+
+      await projection.handleActionProposed({
+        actionId,
+        sessionId,
+        campaignId,
+        playerId,
+        actionType: 'move',
+        description: 'I move',
+        target: null,
+        proposedAt: '2026-03-18T10:05:00.000Z',
+      });
+
+      const data = mockPrisma.sessionAction.createMany.mock.calls[0][0].data[0];
+      expect(data.queuePosition).toBe(3);
     });
 
     it('should throw on missing required field', async () => {
@@ -178,6 +207,35 @@ describe('ActionProjection', () => {
     it('should throw on missing required field', async () => {
       await expect(
         projection.handleActionRejected({ actionId }),
+      ).rejects.toThrow('Invalid event data');
+    });
+  });
+
+  describe('handleActionQueueReordered', () => {
+    const actionId2 = '880e8400-e29b-41d4-a716-446655440003';
+
+    it('should update queuePosition for all reordered actions in a transaction', async () => {
+      await projection.handleActionQueueReordered({
+        sessionId,
+        campaignId,
+        orderedActionIds: [actionId2, actionId],
+        gmUserId,
+        reorderedAt: '2026-03-18T10:10:00.000Z',
+      });
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+      const transactionArg = mockPrisma.$transaction.mock.calls[0][0];
+      expect(transactionArg).toHaveLength(2);
+    });
+
+    it('should throw on missing orderedActionIds', async () => {
+      await expect(
+        projection.handleActionQueueReordered({
+          sessionId,
+          campaignId,
+          gmUserId,
+          reorderedAt: '2026-03-18T10:10:00.000Z',
+        }),
       ).rejects.toThrow('Invalid event data');
     });
   });

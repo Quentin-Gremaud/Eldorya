@@ -52,7 +52,7 @@ export class ActionEventSubscriber implements OnModuleInit, OnModuleDestroy {
       const subscription = client.subscribeToAll({
         fromPosition,
         filter: eventTypeFilter({
-          prefixes: ['PlayerPinged', 'ActionProposed', 'ActionValidated', 'ActionRejected'],
+          prefixes: ['PlayerPinged', 'ActionProposed', 'ActionValidated', 'ActionRejected', 'ActionQueueReordered'],
         }),
       });
 
@@ -77,6 +77,8 @@ export class ActionEventSubscriber implements OnModuleInit, OnModuleDestroy {
             await this.handleActionValidated(data, metadata);
           } else if (eventType === 'ActionRejected') {
             await this.handleActionRejected(data, metadata);
+          } else if (eventType === 'ActionQueueReordered') {
+            await this.handleActionQueueReordered(data, metadata);
           }
 
           const position = resolvedEvent.event?.position;
@@ -312,6 +314,38 @@ export class ActionEventSubscriber implements OnModuleInit, OnModuleDestroy {
 
     this.logger.log(
       `Emitted ActionRejected for action ${actionId} to player ${action.playerId} and GM in session ${sessionId}`,
+    );
+  }
+
+  private async handleActionQueueReordered(
+    data: Record<string, unknown>,
+    metadata: Record<string, unknown> | undefined,
+  ): Promise<void> {
+    const sessionId = data.sessionId as string;
+    const campaignId = data.campaignId as string;
+    const gmUserId = data.gmUserId as string;
+
+    const server = this.sessionGateway.server;
+    if (!server) return;
+
+    const payload = {
+      type: 'ActionQueueReordered',
+      data: {
+        sessionId,
+        campaignId,
+        orderedActionIds: data.orderedActionIds,
+      },
+      metadata: { campaignId, timestamp: metadata?.timestamp },
+    };
+
+    // Emit to GM only — players don't see queue order
+    const gmSockets = await this.roomManager.findSocketsByUserId(server, sessionId, gmUserId);
+    for (const socket of gmSockets) {
+      socket.emit('ActionQueueReordered', payload);
+    }
+
+    this.logger.log(
+      `Emitted ActionQueueReordered to GM ${gmUserId} in session ${sessionId}`,
     );
   }
 }

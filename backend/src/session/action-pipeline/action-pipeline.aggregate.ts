@@ -2,6 +2,7 @@ import { PlayerPinged } from './events/player-pinged.event.js';
 import { ActionProposed } from './events/action-proposed.event.js';
 import { ActionValidated } from './events/action-validated.event.js';
 import { ActionRejected } from './events/action-rejected.event.js';
+import { ActionQueueReordered } from './events/action-queue-reordered.event.js';
 import { ActionProposal } from './action-proposal.js';
 import { SessionId } from '../../shared/session-id.js';
 import { CampaignId } from '../../shared/campaign-id.js';
@@ -10,13 +11,15 @@ import { InvalidActionProposalException } from './exceptions/invalid-action-prop
 import { ActionNotFoundException } from './exceptions/action-not-found.exception.js';
 import { ActionNotPendingException } from './exceptions/action-not-pending.exception.js';
 import { FeedbackRequiredException } from './exceptions/feedback-required.exception.js';
+import { InvalidQueueReorderException } from './exceptions/invalid-queue-reorder.exception.js';
 import type { Clock } from '../../shared/clock.js';
 
 export type ActionPipelineEvent =
   | PlayerPinged
   | ActionProposed
   | ActionValidated
-  | ActionRejected;
+  | ActionRejected
+  | ActionQueueReordered;
 
 const MAX_NARRATIVE_NOTE_LENGTH = 1000;
 const MAX_FEEDBACK_LENGTH = 1000;
@@ -25,7 +28,7 @@ export class ActionPipelineAggregate {
   private sessionId = '';
   private campaignId = '';
   private pingedPlayerIds: Set<string> = new Set();
-  private pendingActionIds: Set<string> = new Set();
+  private pendingActionIds: string[] = [];
   private resolvedActionIds: Set<string> = new Set();
   private uncommittedEvents: ActionPipelineEvent[] = [];
   private _isNew = false;
@@ -85,7 +88,7 @@ export class ActionPipelineAggregate {
     if (!playerId || !playerId.trim()) {
       throw new Error('Player ID cannot be empty');
     }
-    if (this.pendingActionIds.has(actionId)) {
+    if (this.pendingActionIds.includes(actionId)) {
       throw InvalidActionProposalException.forReason(
         `action "${actionId}" has already been proposed`,
       );
@@ -170,11 +173,44 @@ export class ActionPipelineAggregate {
     this.uncommittedEvents.push(event);
   }
 
+  reorderActionQueue(
+    orderedActionIds: string[],
+    gmUserId: string,
+    callerUserId: string,
+    clock: Clock,
+  ): void {
+    if (callerUserId !== gmUserId) {
+      throw NotSessionGmException.forUser(callerUserId);
+    }
+    if (this.pendingActionIds.length === 0) {
+      throw InvalidQueueReorderException.forEmptyQueue();
+    }
+    if (orderedActionIds.length !== this.pendingActionIds.length) {
+      throw InvalidQueueReorderException.forMismatchedActionIds();
+    }
+    const currentSet = new Set(this.pendingActionIds);
+    const providedSet = new Set(orderedActionIds);
+    if (currentSet.size !== providedSet.size || ![...currentSet].every((id) => providedSet.has(id))) {
+      throw InvalidQueueReorderException.forMismatchedActionIds();
+    }
+
+    const event = new ActionQueueReordered(
+      this.sessionId,
+      this.campaignId,
+      orderedActionIds,
+      gmUserId,
+      clock.now().toISOString(),
+    );
+
+    this.applyEvent(event);
+    this.uncommittedEvents.push(event);
+  }
+
   private ensureActionIsPending(actionId: string): void {
-    if (!this.pendingActionIds.has(actionId) && !this.resolvedActionIds.has(actionId)) {
+    if (!this.pendingActionIds.includes(actionId) && !this.resolvedActionIds.has(actionId)) {
       throw ActionNotFoundException.forAction(actionId);
     }
-    if (!this.pendingActionIds.has(actionId)) {
+    if (!this.pendingActionIds.includes(actionId)) {
       throw ActionNotPendingException.forAction(actionId);
     }
   }
@@ -187,13 +223,15 @@ export class ActionPipelineAggregate {
     } else if (event instanceof ActionProposed) {
       this.sessionId = event.sessionId;
       this.campaignId = event.campaignId;
-      this.pendingActionIds.add(event.actionId);
+      this.pendingActionIds.push(event.actionId);
     } else if (event instanceof ActionValidated) {
-      this.pendingActionIds.delete(event.actionId);
+      this.pendingActionIds = this.pendingActionIds.filter((id) => id !== event.actionId);
       this.resolvedActionIds.add(event.actionId);
     } else if (event instanceof ActionRejected) {
-      this.pendingActionIds.delete(event.actionId);
+      this.pendingActionIds = this.pendingActionIds.filter((id) => id !== event.actionId);
       this.resolvedActionIds.add(event.actionId);
+    } else if (event instanceof ActionQueueReordered) {
+      this.pendingActionIds = [...event.orderedActionIds];
     } else {
       throw new Error(
         `Unexpected event type in applyEvent: ${(event as Record<string, unknown>).constructor?.name}`,
@@ -256,6 +294,23 @@ export class ActionPipelineAggregate {
             aggregate.requireString(d, 'gmUserId', event.type),
             aggregate.requireString(d, 'feedback', event.type),
             aggregate.requireString(d, 'rejectedAt', event.type),
+          ),
+        );
+      } else if (event.type === 'ActionQueueReordered') {
+        const d = event.data;
+        const orderedActionIds = d.orderedActionIds;
+        if (!Array.isArray(orderedActionIds)) {
+          throw new Error(
+            `Invalid event data: "orderedActionIds" must be an array in ActionQueueReordered`,
+          );
+        }
+        aggregate.applyEvent(
+          new ActionQueueReordered(
+            aggregate.requireString(d, 'sessionId', event.type),
+            aggregate.requireString(d, 'campaignId', event.type),
+            orderedActionIds as string[],
+            aggregate.requireString(d, 'gmUserId', event.type),
+            aggregate.requireString(d, 'reorderedAt', event.type),
           ),
         );
       } else {

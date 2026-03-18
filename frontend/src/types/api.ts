@@ -389,6 +389,10 @@ export interface RejectActionPayload {
   feedback: string;
 }
 
+export interface ReorderActionQueuePayload {
+  orderedActionIds: string[];
+}
+
 export interface ActionOutcome {
   actionId: string;
   status: ActionStatus;

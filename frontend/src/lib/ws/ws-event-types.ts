@@ -7,6 +7,7 @@ export const WS_COMMANDS = {
   proposeAction: 'propose-action',
   validateAction: 'validate-action',
   rejectAction: 'reject-action',
+  reorderActionQueue: 'reorder-action-queue',
 } as const;
 
 // Server → Client (PascalCase past tense)
@@ -21,4 +22,5 @@ export const WS_EVENTS = {
   ActionProposedConfirmation: 'ActionProposedConfirmation',
   ActionValidated: 'ActionValidated',
   ActionRejected: 'ActionRejected',
+  ActionQueueReordered: 'ActionQueueReordered',
 } as const;

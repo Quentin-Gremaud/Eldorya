@@ -296,4 +296,49 @@ describe('ActionEventSubscriber', () => {
       expect(mockRoomManager.findSocketsByUserId).not.toHaveBeenCalled();
     });
   });
+
+  describe('handleActionQueueReordered', () => {
+    const actionId1 = '770e8400-e29b-41d4-a716-446655440002';
+    const actionId2 = '770e8400-e29b-41d4-a716-446655440003';
+
+    it('should emit ActionQueueReordered to GM only', async () => {
+      mockRoomManager.findSocketsByUserId.mockResolvedValueOnce([gmSocket]);
+
+      await (subscriber as any).handleActionQueueReordered(
+        {
+          sessionId,
+          campaignId,
+          orderedActionIds: [actionId2, actionId1],
+          gmUserId,
+          reorderedAt: '2026-03-18T10:10:00.000Z',
+        },
+        { timestamp: '2026-03-18T10:10:00.000Z' },
+      );
+
+      expect(mockRoomManager.findSocketsByUserId).toHaveBeenCalledWith(
+        mockGateway.server, sessionId, gmUserId,
+      );
+      expect(mockRoomManager.findSocketsByUserId).toHaveBeenCalledTimes(1);
+
+      expect(gmSocket.emit).toHaveBeenCalledWith('ActionQueueReordered', expect.objectContaining({
+        type: 'ActionQueueReordered',
+        data: expect.objectContaining({
+          sessionId,
+          campaignId,
+          orderedActionIds: [actionId2, actionId1],
+        }),
+      }));
+    });
+
+    it('should not emit if server is not available', async () => {
+      mockGateway.server = null;
+
+      await (subscriber as any).handleActionQueueReordered(
+        { sessionId, campaignId, orderedActionIds: [actionId1], gmUserId },
+        {},
+      );
+
+      expect(mockRoomManager.findSocketsByUserId).not.toHaveBeenCalled();
+    });
+  });
 });
