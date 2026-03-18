@@ -207,6 +207,7 @@ export default function GmSessionCockpitPage({
                   <PendingActionQueue
                     campaignId={campaignId}
                     sessionId={session.id}
+                    isGm
                   />
                 )}
               </div>

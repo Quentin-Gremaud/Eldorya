@@ -7,6 +7,8 @@ import {
 } from '../../session/action-pipeline/action-pipeline.aggregate.js';
 import { PlayerPinged } from '../../session/action-pipeline/events/player-pinged.event.js';
 import { ActionProposed } from '../../session/action-pipeline/events/action-proposed.event.js';
+import { ActionValidated } from '../../session/action-pipeline/events/action-validated.event.js';
+import { ActionRejected } from '../../session/action-pipeline/events/action-rejected.event.js';
 import { KurrentDbService } from '../eventstore/kurrentdb.service.js';
 import type { Clock } from '../../shared/clock.js';
 import { CLOCK } from '../../shared/clock.js';
@@ -92,6 +94,26 @@ export class KurrentDbActionPipelineRepository implements ActionPipelineReposito
         description: event.description,
         target: event.target,
         proposedAt: event.proposedAt,
+      };
+    }
+    if (event instanceof ActionValidated) {
+      return {
+        actionId: event.actionId,
+        sessionId: event.sessionId,
+        campaignId: event.campaignId,
+        gmUserId: event.gmUserId,
+        narrativeNote: event.narrativeNote,
+        validatedAt: event.validatedAt,
+      };
+    }
+    if (event instanceof ActionRejected) {
+      return {
+        actionId: event.actionId,
+        sessionId: event.sessionId,
+        campaignId: event.campaignId,
+        gmUserId: event.gmUserId,
+        feedback: event.feedback,
+        rejectedAt: event.rejectedAt,
       };
     }
     const _exhaustive: never = event;

@@ -15,6 +15,15 @@ jest.mock("@/hooks/use-action-pipeline-web-socket", () => ({
   useActionPipelineWebSocket: jest.fn(),
 }));
 
+jest.mock("@/hooks/use-action-outcome-notification", () => ({
+  useActionOutcomeNotification: () => ({
+    outcome: null,
+    onActionValidated: jest.fn(),
+    onActionRejected: jest.fn(),
+    clearOutcome: jest.fn(),
+  }),
+}));
+
 // Mock crypto.randomUUID
 Object.defineProperty(globalThis, "crypto", {
   value: { randomUUID: () => "test-uuid-1234" },

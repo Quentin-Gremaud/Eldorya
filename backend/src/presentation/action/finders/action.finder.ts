@@ -13,6 +13,21 @@ export interface PendingActionResult {
   proposedAt: string;
 }
 
+export interface ResolvedActionResult {
+  id: string;
+  sessionId: string;
+  campaignId: string;
+  playerId: string;
+  actionType: string;
+  description: string;
+  target: string | null;
+  status: string;
+  narrativeNote: string | null;
+  feedback: string | null;
+  proposedAt: string;
+  resolvedAt: string | null;
+}
+
 export interface PingStatusResult {
   playerId: string;
   pingedAt: string;
@@ -44,12 +59,42 @@ export class ActionFinder {
     }));
   }
 
+  async findResolvedActionsBySession(
+    sessionId: string,
+    campaignId: string,
+  ): Promise<ResolvedActionResult[]> {
+    const actions = await this.prisma.sessionAction.findMany({
+      where: {
+        sessionId,
+        campaignId,
+        status: { in: ['validated', 'rejected'] },
+      },
+      orderBy: { resolvedAt: 'desc' },
+    });
+
+    return actions.map((a) => ({
+      id: a.id,
+      sessionId: a.sessionId,
+      campaignId: a.campaignId,
+      playerId: a.playerId,
+      actionType: a.actionType,
+      description: a.description,
+      target: a.target,
+      status: a.status,
+      narrativeNote: a.narrativeNote,
+      feedback: a.feedback,
+      proposedAt: a.proposedAt.toISOString(),
+      resolvedAt: a.resolvedAt?.toISOString() ?? null,
+    }));
+  }
+
   async findLastPingForPlayer(
     sessionId: string,
+    campaignId: string,
     playerId: string,
   ): Promise<PingStatusResult | null> {
     const ping = await this.prisma.sessionPing.findFirst({
-      where: { sessionId, playerId },
+      where: { sessionId, campaignId, playerId },
       orderBy: { pingedAt: 'desc' },
     });
 

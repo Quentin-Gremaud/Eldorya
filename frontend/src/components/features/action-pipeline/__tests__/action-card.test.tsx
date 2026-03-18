@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { ActionCard } from "../action-card";
 import type { PendingAction } from "@/types/api";
 
@@ -84,5 +84,150 @@ describe("ActionCard", () => {
     render(<ActionCard action={makeAction({ proposedAt: twoHoursAgo })} />);
 
     expect(screen.getByText("2h ago")).toBeInTheDocument();
+  });
+
+  describe("GM validation controls", () => {
+    it("shows Validate, Reject, and One-Click Approve buttons when isGm", () => {
+      render(
+        <ActionCard
+          action={makeAction()}
+          isGm
+          onApprove={jest.fn()}
+          onReject={jest.fn()}
+        />
+      );
+
+      expect(screen.getByText("Validate")).toBeInTheDocument();
+      expect(screen.getByText("Reject")).toBeInTheDocument();
+      expect(screen.getByLabelText("One-click approve")).toBeInTheDocument();
+    });
+
+    it("does not show buttons when not GM", () => {
+      render(<ActionCard action={makeAction()} />);
+
+      expect(screen.queryByText("Validate")).not.toBeInTheDocument();
+      expect(screen.queryByText("Reject")).not.toBeInTheDocument();
+    });
+
+    it("shows narrative note textarea on Validate click", () => {
+      render(
+        <ActionCard
+          action={makeAction()}
+          isGm
+          onApprove={jest.fn()}
+          onReject={jest.fn()}
+        />
+      );
+
+      fireEvent.click(screen.getByText("Validate"));
+
+      expect(screen.getByPlaceholderText(/narrative note/i)).toBeInTheDocument();
+      expect(screen.getByText("Confirm")).toBeInTheDocument();
+      expect(screen.getByText("Cancel")).toBeInTheDocument();
+    });
+
+    it("calls onApprove with narrative note on confirm", () => {
+      const onApprove = jest.fn();
+      render(
+        <ActionCard
+          action={makeAction()}
+          isGm
+          onApprove={onApprove}
+          onReject={jest.fn()}
+        />
+      );
+
+      fireEvent.click(screen.getByText("Validate"));
+      fireEvent.change(screen.getByPlaceholderText(/narrative note/i), {
+        target: { value: "Well done" },
+      });
+      fireEvent.click(screen.getByText("Confirm"));
+
+      expect(onApprove).toHaveBeenCalledWith("action-1", "Well done");
+    });
+
+    it("calls onApprove without note on One-Click Approve", () => {
+      const onApprove = jest.fn();
+      render(
+        <ActionCard
+          action={makeAction()}
+          isGm
+          onApprove={onApprove}
+          onReject={jest.fn()}
+        />
+      );
+
+      fireEvent.click(screen.getByLabelText("One-click approve"));
+
+      expect(onApprove).toHaveBeenCalledWith("action-1");
+    });
+
+    it("shows feedback textarea on Reject click", () => {
+      render(
+        <ActionCard
+          action={makeAction()}
+          isGm
+          onApprove={jest.fn()}
+          onReject={jest.fn()}
+        />
+      );
+
+      fireEvent.click(screen.getByText("Reject"));
+
+      expect(screen.getByPlaceholderText(/explain why/i)).toBeInTheDocument();
+      expect(screen.getByText("Confirm Reject")).toBeInTheDocument();
+    });
+
+    it("disables Confirm Reject when feedback is empty", () => {
+      render(
+        <ActionCard
+          action={makeAction()}
+          isGm
+          onApprove={jest.fn()}
+          onReject={jest.fn()}
+        />
+      );
+
+      fireEvent.click(screen.getByText("Reject"));
+
+      expect(screen.getByText("Confirm Reject")).toBeDisabled();
+    });
+
+    it("calls onReject with feedback on confirm", () => {
+      const onReject = jest.fn();
+      render(
+        <ActionCard
+          action={makeAction()}
+          isGm
+          onApprove={jest.fn()}
+          onReject={onReject}
+        />
+      );
+
+      fireEvent.click(screen.getByText("Reject"));
+      fireEvent.change(screen.getByPlaceholderText(/explain why/i), {
+        target: { value: "Too far away" },
+      });
+      fireEvent.click(screen.getByText("Confirm Reject"));
+
+      expect(onReject).toHaveBeenCalledWith("action-1", "Too far away");
+    });
+
+    it("returns to default state on Cancel", () => {
+      render(
+        <ActionCard
+          action={makeAction()}
+          isGm
+          onApprove={jest.fn()}
+          onReject={jest.fn()}
+        />
+      );
+
+      fireEvent.click(screen.getByText("Validate"));
+      expect(screen.getByText("Confirm")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText("Cancel"));
+      expect(screen.getByText("Validate")).toBeInTheDocument();
+    });
   });
 });

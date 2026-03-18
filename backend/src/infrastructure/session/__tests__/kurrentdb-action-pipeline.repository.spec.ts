@@ -72,6 +72,79 @@ describe('KurrentDbActionPipelineRepository', () => {
       });
     });
 
+    it('should serialize ActionValidated event correctly', async () => {
+      const aggregate = ActionPipelineAggregate.loadFromHistory(sessionId, [
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId, sessionId, campaignId, playerId,
+            actionType: 'move', description: 'I move', target: null,
+            proposedAt: '2026-03-18T09:00:00.000Z',
+          },
+        },
+      ]);
+      aggregate.validateAction(actionId, gmUserId, gmUserId, 'Well done', clock);
+
+      await repository.save(aggregate);
+
+      const events = mockKurrentDb.appendEventsToStream.mock.calls[0][1];
+      expect(events[0].eventType).toBe('ActionValidated');
+      expect(events[0].data).toEqual({
+        actionId,
+        sessionId,
+        campaignId,
+        gmUserId,
+        narrativeNote: 'Well done',
+        validatedAt: fixedDate.toISOString(),
+      });
+    });
+
+    it('should serialize ActionValidated event with null narrative note', async () => {
+      const aggregate = ActionPipelineAggregate.loadFromHistory(sessionId, [
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId, sessionId, campaignId, playerId,
+            actionType: 'move', description: 'I move', target: null,
+            proposedAt: '2026-03-18T09:00:00.000Z',
+          },
+        },
+      ]);
+      aggregate.validateAction(actionId, gmUserId, gmUserId, null, clock);
+
+      await repository.save(aggregate);
+
+      const events = mockKurrentDb.appendEventsToStream.mock.calls[0][1];
+      expect(events[0].data.narrativeNote).toBeNull();
+    });
+
+    it('should serialize ActionRejected event correctly', async () => {
+      const aggregate = ActionPipelineAggregate.loadFromHistory(sessionId, [
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId, sessionId, campaignId, playerId,
+            actionType: 'attack', description: 'I attack', target: null,
+            proposedAt: '2026-03-18T09:00:00.000Z',
+          },
+        },
+      ]);
+      aggregate.rejectAction(actionId, gmUserId, gmUserId, 'Too far away', clock);
+
+      await repository.save(aggregate);
+
+      const events = mockKurrentDb.appendEventsToStream.mock.calls[0][1];
+      expect(events[0].eventType).toBe('ActionRejected');
+      expect(events[0].data).toEqual({
+        actionId,
+        sessionId,
+        campaignId,
+        gmUserId,
+        feedback: 'Too far away',
+        rejectedAt: fixedDate.toISOString(),
+      });
+    });
+
     it('should include metadata with correlationId, timestamp, sessionId, campaignId', async () => {
       const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
       aggregate.pingPlayer(playerId, gmUserId, gmUserId, clock);
@@ -156,6 +229,48 @@ describe('KurrentDbActionPipelineRepository', () => {
       expect(aggregate.getCampaignId()).toBe(campaignId);
       expect(aggregate.getPingedPlayerIds()).toContain(playerId);
       expect(aggregate.getPendingActionIds()).toContain(actionId);
+    });
+
+    it('should reconstruct aggregate with validated and rejected actions', async () => {
+      const actionId2 = '880e8400-e29b-41d4-a716-446655440003';
+      mockKurrentDb.readStream.mockResolvedValue([
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId, sessionId, campaignId, playerId,
+            actionType: 'move', description: 'I move', target: null,
+            proposedAt: '2026-03-18T10:00:00.000Z',
+          },
+        },
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId: actionId2, sessionId, campaignId, playerId,
+            actionType: 'attack', description: 'I attack', target: null,
+            proposedAt: '2026-03-18T10:01:00.000Z',
+          },
+        },
+        {
+          type: 'ActionValidated',
+          data: {
+            actionId, sessionId, campaignId, gmUserId,
+            narrativeNote: 'OK',
+            validatedAt: '2026-03-18T10:02:00.000Z',
+          },
+        },
+        {
+          type: 'ActionRejected',
+          data: {
+            actionId: actionId2, sessionId, campaignId, gmUserId,
+            feedback: 'No',
+            rejectedAt: '2026-03-18T10:03:00.000Z',
+          },
+        },
+      ]);
+
+      const aggregate = await repository.load(sessionId);
+
+      expect(aggregate.getPendingActionIds()).toHaveLength(0);
     });
 
     it('should use correct stream name', async () => {

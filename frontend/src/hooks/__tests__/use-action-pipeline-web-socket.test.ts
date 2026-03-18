@@ -206,8 +206,134 @@ describe("useActionPipelineWebSocket", () => {
       { wrapper: Wrapper }
     );
 
-    expect(mockSocket.on).toHaveBeenCalledTimes(4);
+    expect(mockSocket.on).toHaveBeenCalledTimes(6);
     unmount();
-    expect(mockSocket.off).toHaveBeenCalledTimes(4);
+    expect(mockSocket.off).toHaveBeenCalledTimes(6);
+  });
+
+  it("should remove action from pending on ActionValidated event", () => {
+    const { queryClient, Wrapper } = createWrapper();
+    const existing: PendingAction = {
+      id: "a1",
+      sessionId: "s1",
+      campaignId: "c1",
+      playerId: "p1",
+      actionType: "move",
+      description: "I move",
+      target: null,
+      status: "pending",
+      proposedAt: "2026-03-18T10:05:00.000Z",
+    };
+    queryClient.setQueryData(["actions", "c1", "s1", "pending"], [existing]);
+
+    renderHook(() => useActionPipelineWebSocket("c1", "s1"), {
+      wrapper: Wrapper,
+    });
+
+    act(() => {
+      emit("ActionValidated", {
+        type: "ActionValidated",
+        data: {
+          actionId: "a1",
+          sessionId: "s1",
+          campaignId: "c1",
+          narrativeNote: "Well done",
+          validatedAt: "2026-03-18T10:10:00.000Z",
+        },
+      });
+    });
+
+    const actions = queryClient.getQueryData<PendingAction[]>([
+      "actions", "c1", "s1", "pending",
+    ]);
+    expect(actions).toHaveLength(0);
+  });
+
+  it("should remove action from pending on ActionRejected event", () => {
+    const { queryClient, Wrapper } = createWrapper();
+    const existing: PendingAction = {
+      id: "a1",
+      sessionId: "s1",
+      campaignId: "c1",
+      playerId: "p1",
+      actionType: "attack",
+      description: "I attack",
+      target: null,
+      status: "pending",
+      proposedAt: "2026-03-18T10:05:00.000Z",
+    };
+    queryClient.setQueryData(["actions", "c1", "s1", "pending"], [existing]);
+
+    renderHook(() => useActionPipelineWebSocket("c1", "s1"), {
+      wrapper: Wrapper,
+    });
+
+    act(() => {
+      emit("ActionRejected", {
+        type: "ActionRejected",
+        data: {
+          actionId: "a1",
+          sessionId: "s1",
+          campaignId: "c1",
+          feedback: "Too far",
+          rejectedAt: "2026-03-18T10:10:00.000Z",
+        },
+      });
+    });
+
+    const actions = queryClient.getQueryData<PendingAction[]>([
+      "actions", "c1", "s1", "pending",
+    ]);
+    expect(actions).toHaveLength(0);
+  });
+
+  it("should call onActionValidated callback", () => {
+    const { Wrapper } = createWrapper();
+    const onActionValidated = jest.fn();
+
+    renderHook(
+      () => useActionPipelineWebSocket("c1", "s1", { onActionValidated }),
+      { wrapper: Wrapper }
+    );
+
+    act(() => {
+      emit("ActionValidated", {
+        type: "ActionValidated",
+        data: {
+          actionId: "a1",
+          sessionId: "s1",
+          campaignId: "c1",
+          narrativeNote: "Nice",
+          validatedAt: "2026-03-18T10:10:00.000Z",
+        },
+      });
+    });
+
+    expect(onActionValidated).toHaveBeenCalledWith("a1", "Nice");
+  });
+
+  it("should call onActionRejected callback", () => {
+    const { Wrapper } = createWrapper();
+    const onActionRejected = jest.fn();
+
+    renderHook(
+      () => useActionPipelineWebSocket("c1", "s1", { onActionRejected }),
+      { wrapper: Wrapper }
+    );
+
+    act(() => {
+      emit("ActionRejected", {
+        type: "ActionRejected",
+        data: {
+          actionId: "a1",
+          sessionId: "s1",
+          campaignId: "c1",
+          feedback: "No",
+          rejectedAt: "2026-03-18T10:10:00.000Z",
+        },
+      });
+    });
+
+    expect(onActionRejected).toHaveBeenCalledWith("a1", "No");
   });
 });

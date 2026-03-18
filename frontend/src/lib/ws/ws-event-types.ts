@@ -5,6 +5,8 @@ export const WS_COMMANDS = {
   joinSession: 'join-session',
   pingPlayer: 'ping-player',
   proposeAction: 'propose-action',
+  validateAction: 'validate-action',
+  rejectAction: 'reject-action',
 } as const;
 
 // Server → Client (PascalCase past tense)
@@ -17,4 +19,6 @@ export const WS_EVENTS = {
   PlayerPingedGm: 'PlayerPingedGm',
   ActionProposed: 'ActionProposed',
   ActionProposedConfirmation: 'ActionProposedConfirmation',
+  ActionValidated: 'ActionValidated',
+  ActionRejected: 'ActionRejected',
 } as const;

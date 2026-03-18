@@ -1,8 +1,13 @@
 import { ActionPipelineAggregate } from '../action-pipeline.aggregate.js';
 import { PlayerPinged } from '../events/player-pinged.event.js';
 import { ActionProposed } from '../events/action-proposed.event.js';
+import { ActionValidated } from '../events/action-validated.event.js';
+import { ActionRejected } from '../events/action-rejected.event.js';
 import { InvalidActionProposalException } from '../exceptions/invalid-action-proposal.exception.js';
 import { NotSessionGmException } from '../exceptions/not-session-gm.exception.js';
+import { ActionNotFoundException } from '../exceptions/action-not-found.exception.js';
+import { ActionNotPendingException } from '../exceptions/action-not-pending.exception.js';
+import { FeedbackRequiredException } from '../exceptions/feedback-required.exception.js';
 import type { Clock } from '../../../shared/clock.js';
 
 describe('ActionPipelineAggregate', () => {
@@ -344,6 +349,377 @@ describe('ActionPipelineAggregate', () => {
 
       expect(aggregate.getUncommittedEvents()).toHaveLength(1);
       expect(aggregate.getPendingActionIds()).toContain(actionId);
+    });
+  });
+
+  describe('validateAction', () => {
+    it('should emit an ActionValidated event for a pending action', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      aggregate.clearEvents();
+
+      aggregate.validateAction(actionId, gmUserId, gmUserId, 'The path opens before you', clock);
+
+      const events = aggregate.getUncommittedEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toBeInstanceOf(ActionValidated);
+
+      const event = events[0] as ActionValidated;
+      expect(event.actionId).toBe(actionId);
+      expect(event.sessionId).toBe(sessionId);
+      expect(event.campaignId).toBe(campaignId);
+      expect(event.gmUserId).toBe(gmUserId);
+      expect(event.narrativeNote).toBe('The path opens before you');
+      expect(event.validatedAt).toBe(fixedDate.toISOString());
+    });
+
+    it('should validate without narrative note', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      aggregate.clearEvents();
+
+      aggregate.validateAction(actionId, gmUserId, gmUserId, null, clock);
+
+      const event = aggregate.getUncommittedEvents()[0] as ActionValidated;
+      expect(event.narrativeNote).toBeNull();
+    });
+
+    it('should remove action from pending after validation', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+
+      aggregate.validateAction(actionId, gmUserId, gmUserId, null, clock);
+
+      expect(aggregate.getPendingActionIds()).not.toContain(actionId);
+    });
+
+    it('should throw ActionNotFoundException for non-existent action', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+
+      expect(() =>
+        aggregate.validateAction('non-existent-id', gmUserId, gmUserId, null, clock),
+      ).toThrow(ActionNotFoundException);
+    });
+
+    it('should throw ActionNotPendingException for already validated action', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      aggregate.validateAction(actionId, gmUserId, gmUserId, null, clock);
+
+      expect(() =>
+        aggregate.validateAction(actionId, gmUserId, gmUserId, null, clock),
+      ).toThrow(ActionNotPendingException);
+    });
+
+    it('should throw NotSessionGmException if caller is not GM', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+
+      expect(() =>
+        aggregate.validateAction(actionId, gmUserId, 'other-user', null, clock),
+      ).toThrow(NotSessionGmException);
+    });
+
+    it('should trim narrative note before storing', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      aggregate.clearEvents();
+
+      aggregate.validateAction(actionId, gmUserId, gmUserId, '  The path opens  ', clock);
+
+      const event = aggregate.getUncommittedEvents()[0] as ActionValidated;
+      expect(event.narrativeNote).toBe('The path opens');
+    });
+
+    it('should treat whitespace-only narrative note as null', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      aggregate.clearEvents();
+
+      aggregate.validateAction(actionId, gmUserId, gmUserId, '   ', clock);
+
+      const event = aggregate.getUncommittedEvents()[0] as ActionValidated;
+      expect(event.narrativeNote).toBeNull();
+    });
+
+    it('should throw on narrative note exceeding max length', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      const longNote = 'a'.repeat(1001);
+
+      expect(() =>
+        aggregate.validateAction(actionId, gmUserId, gmUserId, longNote, clock),
+      ).toThrow('Narrative note exceeds maximum length');
+    });
+  });
+
+  describe('rejectAction', () => {
+    it('should emit an ActionRejected event for a pending action', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'attack', 'I attack the dragon', null, clock);
+      aggregate.clearEvents();
+
+      aggregate.rejectAction(actionId, gmUserId, gmUserId, 'The dragon is too far away', clock);
+
+      const events = aggregate.getUncommittedEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toBeInstanceOf(ActionRejected);
+
+      const event = events[0] as ActionRejected;
+      expect(event.actionId).toBe(actionId);
+      expect(event.sessionId).toBe(sessionId);
+      expect(event.campaignId).toBe(campaignId);
+      expect(event.gmUserId).toBe(gmUserId);
+      expect(event.feedback).toBe('The dragon is too far away');
+      expect(event.rejectedAt).toBe(fixedDate.toISOString());
+    });
+
+    it('should remove action from pending after rejection', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+
+      aggregate.rejectAction(actionId, gmUserId, gmUserId, 'Not allowed', clock);
+
+      expect(aggregate.getPendingActionIds()).not.toContain(actionId);
+    });
+
+    it('should throw FeedbackRequiredException when feedback is empty', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+
+      expect(() =>
+        aggregate.rejectAction(actionId, gmUserId, gmUserId, '', clock),
+      ).toThrow(FeedbackRequiredException);
+    });
+
+    it('should throw FeedbackRequiredException when feedback is whitespace', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+
+      expect(() =>
+        aggregate.rejectAction(actionId, gmUserId, gmUserId, '   ', clock),
+      ).toThrow(FeedbackRequiredException);
+    });
+
+    it('should throw ActionNotFoundException for non-existent action', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+
+      expect(() =>
+        aggregate.rejectAction('non-existent-id', gmUserId, gmUserId, 'reason', clock),
+      ).toThrow(ActionNotFoundException);
+    });
+
+    it('should throw ActionNotPendingException for already rejected action', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      aggregate.rejectAction(actionId, gmUserId, gmUserId, 'Not allowed', clock);
+
+      expect(() =>
+        aggregate.rejectAction(actionId, gmUserId, gmUserId, 'Still not allowed', clock),
+      ).toThrow(ActionNotPendingException);
+    });
+
+    it('should throw NotSessionGmException if caller is not GM', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+
+      expect(() =>
+        aggregate.rejectAction(actionId, gmUserId, 'other-user', 'reason', clock),
+      ).toThrow(NotSessionGmException);
+    });
+
+    it('should throw on feedback exceeding max length', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      const longFeedback = 'a'.repeat(1001);
+
+      expect(() =>
+        aggregate.rejectAction(actionId, gmUserId, gmUserId, longFeedback, clock),
+      ).toThrow('Feedback exceeds maximum length');
+    });
+
+    it('should trim feedback before storing', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      aggregate.clearEvents();
+
+      aggregate.rejectAction(actionId, gmUserId, gmUserId, '  Too far away  ', clock);
+
+      const event = aggregate.getUncommittedEvents()[0] as ActionRejected;
+      expect(event.feedback).toBe('Too far away');
+    });
+  });
+
+  describe('loadFromHistory with validation/rejection events', () => {
+    it('should reconstruct aggregate from ActionValidated event', () => {
+      const events = [
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            playerId,
+            actionType: 'move',
+            description: 'I move north',
+            target: null,
+            proposedAt: '2026-03-18T10:00:00.000Z',
+          },
+        },
+        {
+          type: 'ActionValidated',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            gmUserId,
+            narrativeNote: 'Well done',
+            validatedAt: '2026-03-18T10:01:00.000Z',
+          },
+        },
+      ];
+
+      const aggregate = ActionPipelineAggregate.loadFromHistory(sessionId, events);
+
+      expect(aggregate.getPendingActionIds()).not.toContain(actionId);
+    });
+
+    it('should reconstruct aggregate from ActionRejected event', () => {
+      const events = [
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            playerId,
+            actionType: 'attack',
+            description: 'I attack',
+            target: null,
+            proposedAt: '2026-03-18T10:00:00.000Z',
+          },
+        },
+        {
+          type: 'ActionRejected',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            gmUserId,
+            feedback: 'Not allowed',
+            rejectedAt: '2026-03-18T10:01:00.000Z',
+          },
+        },
+      ];
+
+      const aggregate = ActionPipelineAggregate.loadFromHistory(sessionId, events);
+
+      expect(aggregate.getPendingActionIds()).not.toContain(actionId);
+    });
+
+    it('should prevent validation of rejected action from history', () => {
+      const events = [
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            playerId,
+            actionType: 'move',
+            description: 'I move',
+            target: null,
+            proposedAt: '2026-03-18T10:00:00.000Z',
+          },
+        },
+        {
+          type: 'ActionRejected',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            gmUserId,
+            feedback: 'Not allowed',
+            rejectedAt: '2026-03-18T10:01:00.000Z',
+          },
+        },
+      ];
+
+      const aggregate = ActionPipelineAggregate.loadFromHistory(sessionId, events);
+
+      expect(() =>
+        aggregate.validateAction(actionId, gmUserId, gmUserId, null, clock),
+      ).toThrow(ActionNotPendingException);
+    });
+
+    it('should prevent rejection of validated action from history', () => {
+      const events = [
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            playerId,
+            actionType: 'move',
+            description: 'I move',
+            target: null,
+            proposedAt: '2026-03-18T10:00:00.000Z',
+          },
+        },
+        {
+          type: 'ActionValidated',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            gmUserId,
+            narrativeNote: null,
+            validatedAt: '2026-03-18T10:01:00.000Z',
+          },
+        },
+      ];
+
+      const aggregate = ActionPipelineAggregate.loadFromHistory(sessionId, events);
+
+      expect(() =>
+        aggregate.rejectAction(actionId, gmUserId, gmUserId, 'reason', clock),
+      ).toThrow(ActionNotPendingException);
+    });
+
+    it('should prevent re-validation of validated action from history', () => {
+      const events = [
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            playerId,
+            actionType: 'move',
+            description: 'I move',
+            target: null,
+            proposedAt: '2026-03-18T10:00:00.000Z',
+          },
+        },
+        {
+          type: 'ActionValidated',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            gmUserId,
+            narrativeNote: null,
+            validatedAt: '2026-03-18T10:01:00.000Z',
+          },
+        },
+      ];
+
+      const aggregate = ActionPipelineAggregate.loadFromHistory(sessionId, events);
+
+      expect(() =>
+        aggregate.validateAction(actionId, gmUserId, gmUserId, null, clock),
+      ).toThrow(ActionNotPendingException);
     });
   });
 

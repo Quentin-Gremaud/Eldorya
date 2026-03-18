@@ -4,7 +4,7 @@ describe('ActionProjection', () => {
   let projection: ActionProjection;
   let mockPrisma: {
     sessionPing: { create: jest.Mock };
-    sessionAction: { createMany: jest.Mock };
+    sessionAction: { createMany: jest.Mock; updateMany: jest.Mock };
     projectionCheckpoint: { findUnique: jest.Mock; upsert: jest.Mock };
   };
 
@@ -17,7 +17,7 @@ describe('ActionProjection', () => {
   beforeEach(() => {
     mockPrisma = {
       sessionPing: { create: jest.fn().mockResolvedValue({}) },
-      sessionAction: { createMany: jest.fn().mockResolvedValue({}) },
+      sessionAction: { createMany: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({}) },
       projectionCheckpoint: {
         findUnique: jest.fn().mockResolvedValue(null),
         upsert: jest.fn().mockResolvedValue({}),
@@ -108,6 +108,76 @@ describe('ActionProjection', () => {
     it('should throw on missing required field', async () => {
       await expect(
         projection.handleActionProposed({ actionId }),
+      ).rejects.toThrow('Invalid event data');
+    });
+  });
+
+  describe('handleActionValidated', () => {
+    it('should update action status to validated with narrative note', async () => {
+      await projection.handleActionValidated({
+        actionId,
+        sessionId,
+        campaignId,
+        gmUserId,
+        narrativeNote: 'The path opens before you',
+        validatedAt: '2026-03-18T10:10:00.000Z',
+      });
+
+      expect(mockPrisma.sessionAction.updateMany).toHaveBeenCalledWith({
+        where: { id: actionId, campaignId },
+        data: {
+          status: 'validated',
+          narrativeNote: 'The path opens before you',
+          resolvedAt: new Date('2026-03-18T10:10:00.000Z'),
+        },
+      });
+    });
+
+    it('should update action status to validated with null narrative note', async () => {
+      await projection.handleActionValidated({
+        actionId,
+        sessionId,
+        campaignId,
+        gmUserId,
+        narrativeNote: null,
+        validatedAt: '2026-03-18T10:10:00.000Z',
+      });
+
+      const data = mockPrisma.sessionAction.updateMany.mock.calls[0][0].data;
+      expect(data.narrativeNote).toBeNull();
+    });
+
+    it('should throw on missing required field', async () => {
+      await expect(
+        projection.handleActionValidated({ actionId }),
+      ).rejects.toThrow('Invalid event data');
+    });
+  });
+
+  describe('handleActionRejected', () => {
+    it('should update action status to rejected with feedback', async () => {
+      await projection.handleActionRejected({
+        actionId,
+        sessionId,
+        campaignId,
+        gmUserId,
+        feedback: 'The dragon is too far away',
+        rejectedAt: '2026-03-18T10:10:00.000Z',
+      });
+
+      expect(mockPrisma.sessionAction.updateMany).toHaveBeenCalledWith({
+        where: { id: actionId, campaignId },
+        data: {
+          status: 'rejected',
+          feedback: 'The dragon is too far away',
+          resolvedAt: new Date('2026-03-18T10:10:00.000Z'),
+        },
+      });
+    });
+
+    it('should throw on missing required field', async () => {
+      await expect(
+        projection.handleActionRejected({ actionId }),
       ).rejects.toThrow('Invalid event data');
     });
   });

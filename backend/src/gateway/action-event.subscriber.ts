@@ -52,7 +52,7 @@ export class ActionEventSubscriber implements OnModuleInit, OnModuleDestroy {
       const subscription = client.subscribeToAll({
         fromPosition,
         filter: eventTypeFilter({
-          prefixes: ['PlayerPinged', 'ActionProposed'],
+          prefixes: ['PlayerPinged', 'ActionProposed', 'ActionValidated', 'ActionRejected'],
         }),
       });
 
@@ -73,6 +73,10 @@ export class ActionEventSubscriber implements OnModuleInit, OnModuleDestroy {
             await this.handlePlayerPinged(data, metadata);
           } else if (eventType === 'ActionProposed') {
             await this.handleActionProposed(data, metadata);
+          } else if (eventType === 'ActionValidated') {
+            await this.handleActionValidated(data, metadata);
+          } else if (eventType === 'ActionRejected') {
+            await this.handleActionRejected(data, metadata);
           }
 
           const position = resolvedEvent.event?.position;
@@ -212,6 +216,102 @@ export class ActionEventSubscriber implements OnModuleInit, OnModuleDestroy {
 
     this.logger.log(
       `Emitted ActionProposed to GM and confirmation to player ${playerId} in session ${sessionId}`,
+    );
+  }
+
+  private async handleActionValidated(
+    data: Record<string, unknown>,
+    metadata: Record<string, unknown> | undefined,
+  ): Promise<void> {
+    const actionId = data.actionId as string;
+    const sessionId = data.sessionId as string;
+    const campaignId = data.campaignId as string;
+    const gmUserId = data.gmUserId as string;
+
+    const server = this.sessionGateway.server;
+    if (!server) return;
+
+    // Look up proposing player from read model
+    const action = await this.prisma.sessionAction.findUnique({
+      where: { id: actionId },
+      select: { playerId: true },
+    });
+    if (!action) return;
+
+    const payload = {
+      type: 'ActionValidated',
+      data: {
+        actionId,
+        sessionId,
+        campaignId,
+        narrativeNote: data.narrativeNote ?? null,
+        validatedAt: data.validatedAt,
+      },
+      metadata: { campaignId, timestamp: metadata?.timestamp },
+    };
+
+    // Emit to proposing player
+    const playerSockets = await this.roomManager.findSocketsByUserId(server, sessionId, action.playerId);
+    for (const socket of playerSockets) {
+      socket.emit('ActionValidated', payload);
+    }
+
+    // Emit confirmation to GM
+    const gmSockets = await this.roomManager.findSocketsByUserId(server, sessionId, gmUserId);
+    for (const socket of gmSockets) {
+      socket.emit('ActionValidated', payload);
+    }
+
+    this.logger.log(
+      `Emitted ActionValidated for action ${actionId} to player ${action.playerId} and GM in session ${sessionId}`,
+    );
+  }
+
+  private async handleActionRejected(
+    data: Record<string, unknown>,
+    metadata: Record<string, unknown> | undefined,
+  ): Promise<void> {
+    const actionId = data.actionId as string;
+    const sessionId = data.sessionId as string;
+    const campaignId = data.campaignId as string;
+    const gmUserId = data.gmUserId as string;
+
+    const server = this.sessionGateway.server;
+    if (!server) return;
+
+    // Look up proposing player from read model
+    const action = await this.prisma.sessionAction.findUnique({
+      where: { id: actionId },
+      select: { playerId: true },
+    });
+    if (!action) return;
+
+    const payload = {
+      type: 'ActionRejected',
+      data: {
+        actionId,
+        sessionId,
+        campaignId,
+        feedback: data.feedback,
+        rejectedAt: data.rejectedAt,
+      },
+      metadata: { campaignId, timestamp: metadata?.timestamp },
+    };
+
+    // Emit to proposing player
+    const playerSockets = await this.roomManager.findSocketsByUserId(server, sessionId, action.playerId);
+    for (const socket of playerSockets) {
+      socket.emit('ActionRejected', payload);
+    }
+
+    // Emit confirmation to GM
+    const gmSockets = await this.roomManager.findSocketsByUserId(server, sessionId, gmUserId);
+    for (const socket of gmSockets) {
+      socket.emit('ActionRejected', payload);
+    }
+
+    this.logger.log(
+      `Emitted ActionRejected for action ${actionId} to player ${action.playerId} and GM in session ${sessionId}`,
     );
   }
 }

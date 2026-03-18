@@ -379,6 +379,24 @@ export interface ProposeActionPayload {
   target?: string;
 }
 
+export type ActionStatus = "pending" | "validated" | "rejected";
+
+export interface ValidateActionPayload {
+  narrativeNote?: string;
+}
+
+export interface RejectActionPayload {
+  feedback: string;
+}
+
+export interface ActionOutcome {
+  actionId: string;
+  status: ActionStatus;
+  narrativeNote?: string | null;
+  feedback?: string | null;
+  resolvedAt: string;
+}
+
 export interface NotificationItem {
   id: string;
   type: string;

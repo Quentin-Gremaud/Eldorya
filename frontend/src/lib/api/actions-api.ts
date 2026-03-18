@@ -5,6 +5,8 @@ import type {
   PingStatus,
   PingPlayerPayload,
   ProposeActionPayload,
+  ValidateActionPayload,
+  RejectActionPayload,
 } from "@/types/api";
 
 type ApiFetch = <T>(path: string, options?: RequestInit) => Promise<T>;
@@ -47,6 +49,36 @@ export function createActionsApi(apiFetch: ApiFetch) {
     getPingStatus: (campaignId: string, sessionId: string) =>
       apiFetch<{ data: PingStatus | null }>(
         `/api/campaigns/${campaignId}/sessions/${sessionId}/ping-status`
+      ),
+
+    validateAction: (
+      campaignId: string,
+      sessionId: string,
+      actionId: string,
+      payload: ValidateActionPayload
+    ) =>
+      apiFetch<void>(
+        `/api/campaigns/${campaignId}/sessions/${sessionId}/actions/${actionId}/validate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      ),
+
+    rejectAction: (
+      campaignId: string,
+      sessionId: string,
+      actionId: string,
+      payload: RejectActionPayload
+    ) =>
+      apiFetch<void>(
+        `/api/campaigns/${campaignId}/sessions/${sessionId}/actions/${actionId}/reject`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
       ),
   };
 }

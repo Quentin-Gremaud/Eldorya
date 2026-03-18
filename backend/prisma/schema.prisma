@@ -249,9 +249,11 @@ model SessionAction {
   actionType String    @map("action_type")
   description String
   target     String?
-  status     String    @default("pending")
-  proposedAt DateTime  @map("proposed_at")
-  resolvedAt DateTime? @map("resolved_at")
+  status        String    @default("pending")
+  narrativeNote String?   @map("narrative_note")
+  feedback      String?
+  proposedAt    DateTime  @map("proposed_at")
+  resolvedAt    DateTime? @map("resolved_at")
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 

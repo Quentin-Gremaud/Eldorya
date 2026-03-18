@@ -7,6 +7,7 @@ describe('ActionEventSubscriber', () => {
   let mockPrisma: {
     projectionCheckpoint: { findUnique: jest.Mock; upsert: jest.Mock };
     session: { findUnique: jest.Mock };
+    sessionAction: { findUnique: jest.Mock };
   };
 
   const sessionId = '550e8400-e29b-41d4-a716-446655440000';
@@ -41,6 +42,9 @@ describe('ActionEventSubscriber', () => {
       },
       session: {
         findUnique: jest.fn().mockResolvedValue({ gmUserId }),
+      },
+      sessionAction: {
+        findUnique: jest.fn().mockResolvedValue({ playerId }),
       },
     };
 
@@ -167,6 +171,125 @@ describe('ActionEventSubscriber', () => {
 
       await (subscriber as any).handleActionProposed(
         { actionId, sessionId, campaignId, playerId, actionType: 'move', description: 'test', target: null, proposedAt: '2026-03-18T10:05:00.000Z' },
+        {},
+      );
+
+      expect(mockRoomManager.findSocketsByUserId).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleActionValidated', () => {
+    const actionId = '770e8400-e29b-41d4-a716-446655440002';
+
+    it('should emit ActionValidated to proposing player and GM', async () => {
+      mockRoomManager.findSocketsByUserId
+        .mockResolvedValueOnce([playerSocket]) // player lookup
+        .mockResolvedValueOnce([gmSocket]);    // gm lookup
+
+      await (subscriber as any).handleActionValidated(
+        {
+          actionId, sessionId, campaignId, gmUserId,
+          narrativeNote: 'Well done',
+          validatedAt: '2026-03-18T10:10:00.000Z',
+        },
+        { timestamp: '2026-03-18T10:10:00.000Z' },
+      );
+
+      expect(mockPrisma.sessionAction.findUnique).toHaveBeenCalledWith({
+        where: { id: actionId },
+        select: { playerId: true },
+      });
+
+      expect(playerSocket.emit).toHaveBeenCalledWith('ActionValidated', expect.objectContaining({
+        type: 'ActionValidated',
+        data: expect.objectContaining({
+          actionId,
+          narrativeNote: 'Well done',
+        }),
+      }));
+
+      expect(gmSocket.emit).toHaveBeenCalledWith('ActionValidated', expect.objectContaining({
+        type: 'ActionValidated',
+      }));
+    });
+
+    it('should emit ActionValidated with null narrativeNote', async () => {
+      mockRoomManager.findSocketsByUserId
+        .mockResolvedValueOnce([playerSocket])
+        .mockResolvedValueOnce([gmSocket]);
+
+      await (subscriber as any).handleActionValidated(
+        {
+          actionId, sessionId, campaignId, gmUserId,
+          narrativeNote: null,
+          validatedAt: '2026-03-18T10:10:00.000Z',
+        },
+        { timestamp: '2026-03-18T10:10:00.000Z' },
+      );
+
+      expect(playerSocket.emit).toHaveBeenCalledWith('ActionValidated', expect.objectContaining({
+        data: expect.objectContaining({ narrativeNote: null }),
+      }));
+    });
+
+    it('should not emit if action not found in read model', async () => {
+      mockPrisma.sessionAction.findUnique.mockResolvedValue(null);
+
+      await (subscriber as any).handleActionValidated(
+        { actionId, sessionId, campaignId, gmUserId, narrativeNote: null, validatedAt: '2026-03-18T10:10:00.000Z' },
+        {},
+      );
+
+      expect(mockRoomManager.findSocketsByUserId).not.toHaveBeenCalled();
+    });
+
+    it('should not emit if server is not available', async () => {
+      mockGateway.server = null;
+
+      await (subscriber as any).handleActionValidated(
+        { actionId, sessionId, campaignId, gmUserId, narrativeNote: null, validatedAt: '2026-03-18T10:10:00.000Z' },
+        {},
+      );
+
+      expect(mockPrisma.sessionAction.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleActionRejected', () => {
+    const actionId = '770e8400-e29b-41d4-a716-446655440002';
+
+    it('should emit ActionRejected to proposing player and GM', async () => {
+      mockRoomManager.findSocketsByUserId
+        .mockResolvedValueOnce([playerSocket]) // player lookup
+        .mockResolvedValueOnce([gmSocket]);    // gm lookup
+
+      await (subscriber as any).handleActionRejected(
+        {
+          actionId, sessionId, campaignId, gmUserId,
+          feedback: 'Too far away',
+          rejectedAt: '2026-03-18T10:10:00.000Z',
+        },
+        { timestamp: '2026-03-18T10:10:00.000Z' },
+      );
+
+      expect(playerSocket.emit).toHaveBeenCalledWith('ActionRejected', expect.objectContaining({
+        type: 'ActionRejected',
+        data: expect.objectContaining({
+          actionId,
+          feedback: 'Too far away',
+        }),
+      }));
+
+      expect(gmSocket.emit).toHaveBeenCalledWith('ActionRejected', expect.objectContaining({
+        type: 'ActionRejected',
+      }));
+    });
+
+    it('should not emit if action not found in read model', async () => {
+      mockPrisma.sessionAction.findUnique.mockResolvedValue(null);
+
+      await (subscriber as any).handleActionRejected(
+        { actionId, sessionId, campaignId, gmUserId, feedback: 'No', rejectedAt: '2026-03-18T10:10:00.000Z' },
         {},
       );
 

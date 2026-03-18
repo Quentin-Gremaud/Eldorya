@@ -47,7 +47,7 @@ export class ActionProjection implements OnModuleInit, OnModuleDestroy {
 
       const subscription = client.subscribeToAll({
         fromPosition,
-        filter: eventTypeFilter({ prefixes: ['PlayerPinged', 'ActionProposed'] }),
+        filter: eventTypeFilter({ prefixes: ['PlayerPinged', 'ActionProposed', 'ActionValidated', 'ActionRejected'] }),
       });
 
       this.logger.log(
@@ -66,6 +66,10 @@ export class ActionProjection implements OnModuleInit, OnModuleDestroy {
             await this.handlePlayerPinged(data);
           } else if (eventType === 'ActionProposed') {
             await this.handleActionProposed(data);
+          } else if (eventType === 'ActionValidated') {
+            await this.handleActionValidated(data);
+          } else if (eventType === 'ActionRejected') {
+            await this.handleActionRejected(data);
           }
 
           const position = resolvedEvent.event?.position;
@@ -164,5 +168,41 @@ export class ActionProjection implements OnModuleInit, OnModuleDestroy {
     this.logger.log(
       `Action ${actionId} proposed by player ${playerId} in session ${sessionId}`,
     );
+  }
+
+  async handleActionValidated(data: Record<string, unknown>): Promise<void> {
+    const actionId = this.requireString(data, 'actionId', 'ActionValidated');
+    const campaignId = this.requireString(data, 'campaignId', 'ActionValidated');
+    const validatedAt = this.requireString(data, 'validatedAt', 'ActionValidated');
+    const narrativeNote = typeof data.narrativeNote === 'string' ? data.narrativeNote : null;
+
+    await this.prisma.sessionAction.updateMany({
+      where: { id: actionId, campaignId },
+      data: {
+        status: 'validated',
+        narrativeNote,
+        resolvedAt: new Date(validatedAt),
+      },
+    });
+
+    this.logger.log(`Action ${actionId} validated`);
+  }
+
+  async handleActionRejected(data: Record<string, unknown>): Promise<void> {
+    const actionId = this.requireString(data, 'actionId', 'ActionRejected');
+    const campaignId = this.requireString(data, 'campaignId', 'ActionRejected');
+    const rejectedAt = this.requireString(data, 'rejectedAt', 'ActionRejected');
+    const feedback = this.requireString(data, 'feedback', 'ActionRejected');
+
+    await this.prisma.sessionAction.updateMany({
+      where: { id: actionId, campaignId },
+      data: {
+        status: 'rejected',
+        feedback,
+        resolvedAt: new Date(rejectedAt),
+      },
+    });
+
+    this.logger.log(`Action ${actionId} rejected`);
   }
 }

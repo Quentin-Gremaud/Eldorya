@@ -35,6 +35,14 @@ jest.mock("@/hooks/use-action-pipeline-web-socket", () => ({
   useActionPipelineWebSocket: jest.fn(),
 }));
 
+jest.mock("@/hooks/use-validate-action", () => ({
+  useValidateAction: jest.fn(() => ({ mutate: jest.fn() })),
+}));
+
+jest.mock("@/hooks/use-reject-action", () => ({
+  useRejectAction: jest.fn(() => ({ mutate: jest.fn() })),
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { usePendingActions } = require("@/hooks/use-pending-actions");
 
@@ -48,7 +56,7 @@ describe("PendingActionQueue", () => {
     (usePendingActions as jest.Mock).mockReturnValue({ actions: [] });
 
     render(
-      <PendingActionQueue campaignId="campaign-1" sessionId="session-1" />
+      <PendingActionQueue campaignId="campaign-1" sessionId="session-1" isGm />
     );
 
     expect(screen.getByText("No pending actions")).toBeInTheDocument();
@@ -56,7 +64,7 @@ describe("PendingActionQueue", () => {
 
   it("renders action cards for each pending action", () => {
     render(
-      <PendingActionQueue campaignId="campaign-1" sessionId="session-1" />
+      <PendingActionQueue campaignId="campaign-1" sessionId="session-1" isGm />
     );
 
     expect(screen.getByText("I move to the north gate")).toBeInTheDocument();
@@ -65,7 +73,7 @@ describe("PendingActionQueue", () => {
 
   it("shows count in header", () => {
     render(
-      <PendingActionQueue campaignId="campaign-1" sessionId="session-1" />
+      <PendingActionQueue campaignId="campaign-1" sessionId="session-1" isGm />
     );
 
     expect(screen.getByText("Pending Actions (2)")).toBeInTheDocument();
@@ -75,7 +83,7 @@ describe("PendingActionQueue", () => {
     (usePendingActions as jest.Mock).mockReturnValue({ actions: [] });
 
     render(
-      <PendingActionQueue campaignId="campaign-1" sessionId="session-1" />
+      <PendingActionQueue campaignId="campaign-1" sessionId="session-1" isGm />
     );
 
     expect(screen.getByText("Pending Actions (0)")).toBeInTheDocument();
@@ -83,7 +91,7 @@ describe("PendingActionQueue", () => {
 
   it("collapse toggle hides action cards", () => {
     render(
-      <PendingActionQueue campaignId="campaign-1" sessionId="session-1" />
+      <PendingActionQueue campaignId="campaign-1" sessionId="session-1" isGm />
     );
 
     // Actions should be visible initially
@@ -100,7 +108,7 @@ describe("PendingActionQueue", () => {
 
   it("expand toggle shows action cards again", () => {
     render(
-      <PendingActionQueue campaignId="campaign-1" sessionId="session-1" />
+      <PendingActionQueue campaignId="campaign-1" sessionId="session-1" isGm />
     );
 
     // Collapse

@@ -41,8 +41,32 @@ interface ActionConfirmationPayload {
   };
 }
 
+interface ActionValidatedPayload {
+  type: string;
+  data: {
+    actionId: string;
+    sessionId: string;
+    campaignId: string;
+    narrativeNote: string | null;
+    validatedAt: string;
+  };
+}
+
+interface ActionRejectedPayload {
+  type: string;
+  data: {
+    actionId: string;
+    sessionId: string;
+    campaignId: string;
+    feedback: string;
+    rejectedAt: string;
+  };
+}
+
 interface ActionPipelineWebSocketOptions {
   onActionConfirmed?: (actionId: string) => void;
+  onActionValidated?: (actionId: string, narrativeNote: string | null) => void;
+  onActionRejected?: (actionId: string, feedback: string) => void;
 }
 
 export function useActionPipelineWebSocket(
@@ -104,6 +128,26 @@ export function useActionPipelineWebSocket(
       options?.onActionConfirmed?.(payload.data.actionId);
     };
 
+    const handleActionValidated = (payload: ActionValidatedPayload) => {
+      if (payload.data.campaignId !== campaignId) return;
+
+      queryClient.setQueryData<PendingAction[]>(pendingKey, (old) =>
+        (old ?? []).filter((a) => a.id !== payload.data.actionId)
+      );
+
+      options?.onActionValidated?.(payload.data.actionId, payload.data.narrativeNote);
+    };
+
+    const handleActionRejected = (payload: ActionRejectedPayload) => {
+      if (payload.data.campaignId !== campaignId) return;
+
+      queryClient.setQueryData<PendingAction[]>(pendingKey, (old) =>
+        (old ?? []).filter((a) => a.id !== payload.data.actionId)
+      );
+
+      options?.onActionRejected?.(payload.data.actionId, payload.data.feedback);
+    };
+
     socket.on(WS_EVENTS.PlayerPinged, handlePlayerPinged);
     socket.on(WS_EVENTS.PlayerPingedGm, handlePlayerPingedGm);
     socket.on(WS_EVENTS.ActionProposed, handleActionProposed);
@@ -111,6 +155,8 @@ export function useActionPipelineWebSocket(
       WS_EVENTS.ActionProposedConfirmation,
       handleActionProposedConfirmation
     );
+    socket.on(WS_EVENTS.ActionValidated, handleActionValidated);
+    socket.on(WS_EVENTS.ActionRejected, handleActionRejected);
 
     return () => {
       socket.off(WS_EVENTS.PlayerPinged, handlePlayerPinged);
@@ -120,6 +166,8 @@ export function useActionPipelineWebSocket(
         WS_EVENTS.ActionProposedConfirmation,
         handleActionProposedConfirmation
       );
+      socket.off(WS_EVENTS.ActionValidated, handleActionValidated);
+      socket.off(WS_EVENTS.ActionRejected, handleActionRejected);
     };
-  }, [socket, campaignId, sessionId, queryClient, options?.onActionConfirmed]);
+  }, [socket, campaignId, sessionId, queryClient, options?.onActionConfirmed, options?.onActionValidated, options?.onActionRejected]);
 }

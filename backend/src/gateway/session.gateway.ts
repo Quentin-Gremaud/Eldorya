@@ -16,9 +16,13 @@ import { RoomManagerService } from './services/room-manager.service.js';
 import { SessionFinder } from '../presentation/session/finders/session.finder.js';
 import { PingPlayerCommand } from '../session/action-pipeline/commands/ping-player.command.js';
 import { ProposeActionCommand } from '../session/action-pipeline/commands/propose-action.command.js';
+import { ValidateActionCommand } from '../session/action-pipeline/commands/validate-action.command.js';
+import { RejectActionCommand } from '../session/action-pipeline/commands/reject-action.command.js';
 
 const ALLOWED_ACTION_TYPES = ['move', 'attack', 'interact', 'free-text'] as const;
 const MAX_DESCRIPTION_LENGTH = 500;
+const MAX_NARRATIVE_NOTE_LENGTH = 1000;
+const MAX_FEEDBACK_LENGTH = 1000;
 
 @WebSocketGateway({
   cors: {
@@ -224,6 +228,117 @@ export class SessionGateway
     } catch (err) {
       this.logger.error(`Failed to propose action: ${err instanceof Error ? err.message : String(err)}`);
       return { success: false, error: 'Failed to propose action' };
+    }
+  }
+
+  @SubscribeMessage('validate-action')
+  async handleValidateAction(
+    client: AuthenticatedSocket,
+    payload: {
+      sessionId: string;
+      campaignId: string;
+      actionId: string;
+      narrativeNote?: string;
+    },
+  ): Promise<{ success: boolean; error?: string }> {
+    const { sessionId, campaignId, actionId, narrativeNote } = payload;
+
+    if (!sessionId || typeof sessionId !== 'string') {
+      return { success: false, error: 'Invalid sessionId' };
+    }
+    if (!campaignId || typeof campaignId !== 'string') {
+      return { success: false, error: 'Invalid campaignId' };
+    }
+    if (!actionId || typeof actionId !== 'string') {
+      return { success: false, error: 'Invalid actionId' };
+    }
+    if (narrativeNote !== undefined && narrativeNote !== null) {
+      if (typeof narrativeNote !== 'string' || narrativeNote.length > MAX_NARRATIVE_NOTE_LENGTH) {
+        return { success: false, error: 'Invalid narrativeNote' };
+      }
+    }
+
+    const session = await this.sessionFinder.findById(sessionId);
+    if (!session || session.campaignId !== campaignId) {
+      return { success: false, error: 'Session not found' };
+    }
+    if (session.gmUserId !== client.userId) {
+      return { success: false, error: 'Only the GM can validate actions' };
+    }
+    if (session.mode !== 'live') {
+      return { success: false, error: 'Session is not in live mode' };
+    }
+
+    try {
+      await this.commandBus.execute(
+        new ValidateActionCommand(
+          actionId,
+          sessionId,
+          campaignId,
+          client.userId,
+          narrativeNote ?? null,
+        ),
+      );
+      return { success: true };
+    } catch (err) {
+      this.logger.error(`Failed to validate action: ${err instanceof Error ? err.message : String(err)}`);
+      return { success: false, error: 'Failed to validate action' };
+    }
+  }
+
+  @SubscribeMessage('reject-action')
+  async handleRejectAction(
+    client: AuthenticatedSocket,
+    payload: {
+      sessionId: string;
+      campaignId: string;
+      actionId: string;
+      feedback: string;
+    },
+  ): Promise<{ success: boolean; error?: string }> {
+    const { sessionId, campaignId, actionId, feedback } = payload;
+
+    if (!sessionId || typeof sessionId !== 'string') {
+      return { success: false, error: 'Invalid sessionId' };
+    }
+    if (!campaignId || typeof campaignId !== 'string') {
+      return { success: false, error: 'Invalid campaignId' };
+    }
+    if (!actionId || typeof actionId !== 'string') {
+      return { success: false, error: 'Invalid actionId' };
+    }
+    if (!feedback || typeof feedback !== 'string' || feedback.trim().length === 0) {
+      return { success: false, error: 'Feedback is required' };
+    }
+    if (feedback.length > MAX_FEEDBACK_LENGTH) {
+      return { success: false, error: 'Feedback is too long' };
+    }
+
+    const session = await this.sessionFinder.findById(sessionId);
+    if (!session || session.campaignId !== campaignId) {
+      return { success: false, error: 'Session not found' };
+    }
+    if (session.gmUserId !== client.userId) {
+      return { success: false, error: 'Only the GM can reject actions' };
+    }
+    if (session.mode !== 'live') {
+      return { success: false, error: 'Session is not in live mode' };
+    }
+
+    try {
+      await this.commandBus.execute(
+        new RejectActionCommand(
+          actionId,
+          sessionId,
+          campaignId,
+          client.userId,
+          feedback.trim(),
+        ),
+      );
+      return { success: true };
+    } catch (err) {
+      this.logger.error(`Failed to reject action: ${err instanceof Error ? err.message : String(err)}`);
+      return { success: false, error: 'Failed to reject action' };
     }
   }
 }
