@@ -47,7 +47,7 @@ export class ActionProjection implements OnModuleInit, OnModuleDestroy {
 
       const subscription = client.subscribeToAll({
         fromPosition,
-        filter: eventTypeFilter({ prefixes: ['PlayerPinged', 'ActionProposed', 'ActionValidated', 'ActionRejected', 'ActionQueueReordered'] }),
+        filter: eventTypeFilter({ prefixes: ['PlayerPinged', 'ActionProposed', 'ActionValidated', 'ActionRejected', 'ActionQueueReordered', 'ActionCancelled'] }),
       });
 
       this.logger.log(
@@ -72,6 +72,8 @@ export class ActionProjection implements OnModuleInit, OnModuleDestroy {
             await this.handleActionRejected(data);
           } else if (eventType === 'ActionQueueReordered') {
             await this.handleActionQueueReordered(data);
+          } else if (eventType === 'ActionCancelled') {
+            await this.handleActionCancelled(data);
           }
 
           const position = resolvedEvent.event?.position;
@@ -213,6 +215,22 @@ export class ActionProjection implements OnModuleInit, OnModuleDestroy {
     });
 
     this.logger.log(`Action ${actionId} rejected`);
+  }
+
+  async handleActionCancelled(data: Record<string, unknown>): Promise<void> {
+    const actionId = this.requireString(data, 'actionId', 'ActionCancelled');
+    const campaignId = this.requireString(data, 'campaignId', 'ActionCancelled');
+    const cancelledAt = this.requireString(data, 'cancelledAt', 'ActionCancelled');
+
+    await this.prisma.sessionAction.updateMany({
+      where: { id: actionId, campaignId },
+      data: {
+        status: 'cancelled',
+        resolvedAt: new Date(cancelledAt),
+      },
+    });
+
+    this.logger.log(`Action ${actionId} cancelled`);
   }
 
   async handleActionQueueReordered(data: Record<string, unknown>): Promise<void> {

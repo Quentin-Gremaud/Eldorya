@@ -47,7 +47,7 @@ export class SessionProjection implements OnModuleInit, OnModuleDestroy {
 
       const subscription = client.subscribeToAll({
         fromPosition,
-        filter: eventTypeFilter({ prefixes: ['Session'] }),
+        filter: eventTypeFilter({ prefixes: ['Session', 'PipelineMode'] }),
       });
 
       this.logger.log(
@@ -66,6 +66,8 @@ export class SessionProjection implements OnModuleInit, OnModuleDestroy {
             await this.handleSessionStarted(data);
           } else if (eventType === 'SessionModeChanged') {
             await this.handleSessionModeChanged(data);
+          } else if (eventType === 'PipelineModeChanged') {
+            await this.handlePipelineModeChanged(data);
           }
 
           const position = resolvedEvent.event?.position;
@@ -140,13 +142,27 @@ export class SessionProjection implements OnModuleInit, OnModuleDestroy {
 
   async handleSessionModeChanged(data: Record<string, unknown>): Promise<void> {
     const sessionId = this.requireString(data, 'sessionId', 'SessionModeChanged');
+    const campaignId = this.requireString(data, 'campaignId', 'SessionModeChanged');
     const newMode = this.requireString(data, 'newMode', 'SessionModeChanged');
 
     await this.prisma.session.updateMany({
-      where: { id: sessionId },
+      where: { id: sessionId, campaignId },
       data: { mode: newMode },
     });
 
     this.logger.log(`Session ${sessionId} mode changed to ${newMode}`);
+  }
+
+  async handlePipelineModeChanged(data: Record<string, unknown>): Promise<void> {
+    const sessionId = this.requireString(data, 'sessionId', 'PipelineModeChanged');
+    const campaignId = this.requireString(data, 'campaignId', 'PipelineModeChanged');
+    const pipelineMode = this.requireString(data, 'pipelineMode', 'PipelineModeChanged');
+
+    await this.prisma.session.updateMany({
+      where: { id: sessionId, campaignId },
+      data: { pipelineMode },
+    });
+
+    this.logger.log(`Session ${sessionId} pipeline mode changed to ${pipelineMode}`);
   }
 }

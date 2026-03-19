@@ -1,8 +1,11 @@
 import { SessionAggregate } from '../session.aggregate.js';
 import { SessionStarted } from '../events/session-started.event.js';
 import { SessionModeChanged } from '../events/session-mode-changed.event.js';
+import { PipelineModeChanged } from '../events/pipeline-mode-changed.event.js';
 import { SessionNotActiveException } from '../exceptions/session-not-active.exception.js';
 import { SameModeTransitionException } from '../exceptions/same-mode-transition.exception.js';
+import { SamePipelineModeException } from '../exceptions/same-pipeline-mode.exception.js';
+import { NotSessionGmException } from '../exceptions/not-session-gm.exception.js';
 import type { Clock } from '../../../shared/clock.js';
 
 describe('SessionAggregate', () => {
@@ -109,6 +112,69 @@ describe('SessionAggregate', () => {
     });
   });
 
+  describe('togglePipelineMode', () => {
+    it('should toggle from optional to mandatory', () => {
+      const aggregate = SessionAggregate.start(sessionId, campaignId, gmUserId, clock);
+      aggregate.clearEvents();
+
+      aggregate.togglePipelineMode('mandatory', gmUserId, clock);
+
+      expect(aggregate.getPipelineMode()).toBe('mandatory');
+      const events = aggregate.getUncommittedEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toBeInstanceOf(PipelineModeChanged);
+
+      const event = events[0] as PipelineModeChanged;
+      expect(event.sessionId).toBe(sessionId);
+      expect(event.campaignId).toBe(campaignId);
+      expect(event.pipelineMode).toBe('mandatory');
+      expect(event.changedAt).toBe(fixedDate.toISOString());
+    });
+
+    it('should toggle from mandatory to optional', () => {
+      const aggregate = SessionAggregate.start(sessionId, campaignId, gmUserId, clock);
+      aggregate.togglePipelineMode('mandatory', gmUserId, clock);
+      aggregate.clearEvents();
+
+      aggregate.togglePipelineMode('optional', gmUserId, clock);
+
+      expect(aggregate.getPipelineMode()).toBe('optional');
+      const events = aggregate.getUncommittedEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toBeInstanceOf(PipelineModeChanged);
+    });
+
+    it('should throw SamePipelineModeException when toggling to same mode', () => {
+      const aggregate = SessionAggregate.start(sessionId, campaignId, gmUserId, clock);
+
+      expect(() =>
+        aggregate.togglePipelineMode('optional', gmUserId, clock),
+      ).toThrow(SamePipelineModeException);
+    });
+
+    it('should throw NotSessionGmException if caller is not GM', () => {
+      const aggregate = SessionAggregate.start(sessionId, campaignId, gmUserId, clock);
+
+      expect(() =>
+        aggregate.togglePipelineMode('mandatory', 'other-user', clock),
+      ).toThrow(NotSessionGmException);
+    });
+
+    it('should throw on invalid pipeline mode', () => {
+      const aggregate = SessionAggregate.start(sessionId, campaignId, gmUserId, clock);
+
+      expect(() =>
+        aggregate.togglePipelineMode('invalid', gmUserId, clock),
+      ).toThrow("Invalid PipelineMode: 'invalid'");
+    });
+
+    it('should default to optional mode when session starts', () => {
+      const aggregate = SessionAggregate.start(sessionId, campaignId, gmUserId, clock);
+
+      expect(aggregate.getPipelineMode()).toBe('optional');
+    });
+  });
+
   describe('loadFromHistory', () => {
     it('should reconstruct aggregate from SessionStarted event', () => {
       const events = [
@@ -161,6 +227,35 @@ describe('SessionAggregate', () => {
       const aggregate = SessionAggregate.loadFromHistory(sessionId, events);
 
       expect(aggregate.getMode()).toBe('live');
+    });
+
+    it('should reconstruct aggregate with pipeline mode changes', () => {
+      const events = [
+        {
+          type: 'SessionStarted',
+          data: {
+            sessionId,
+            campaignId,
+            gmUserId,
+            mode: 'preparation',
+            startedAt: '2026-03-14T10:00:00.000Z',
+          },
+        },
+        {
+          type: 'PipelineModeChanged',
+          data: {
+            sessionId,
+            campaignId,
+            gmUserId,
+            pipelineMode: 'mandatory',
+            changedAt: '2026-03-14T10:30:00.000Z',
+          },
+        },
+      ];
+
+      const aggregate = SessionAggregate.loadFromHistory(sessionId, events);
+
+      expect(aggregate.getPipelineMode()).toBe('mandatory');
     });
 
     it('should throw on unknown event type', () => {

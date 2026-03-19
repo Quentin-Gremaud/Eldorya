@@ -1,19 +1,24 @@
 import { SessionStarted } from './events/session-started.event.js';
 import { SessionModeChanged } from './events/session-mode-changed.event.js';
+import { PipelineModeChanged } from './events/pipeline-mode-changed.event.js';
 import { SessionMode } from './session-mode.js';
+import { PipelineMode } from './pipeline-mode.js';
 import { SessionStatus } from './session-status.js';
 import { SessionId } from '../../shared/session-id.js';
 import { CampaignId } from '../../shared/campaign-id.js';
 import { SessionNotActiveException } from './exceptions/session-not-active.exception.js';
+import { NotSessionGmException } from './exceptions/not-session-gm.exception.js';
 import type { Clock } from '../../shared/clock.js';
 
-export type SessionEvent = SessionStarted | SessionModeChanged;
+
+export type SessionEvent = SessionStarted | SessionModeChanged | PipelineModeChanged;
 
 export class SessionAggregate {
   private sessionId = '';
   private campaignId = '';
   private gmUserId = '';
   private mode: SessionMode = SessionMode.preparation();
+  private pipelineMode: PipelineMode = PipelineMode.optional();
   private status: SessionStatus = SessionStatus.active();
   private startedAt = '';
   private uncommittedEvents: SessionEvent[] = [];
@@ -69,6 +74,33 @@ export class SessionAggregate {
     this.uncommittedEvents.push(event);
   }
 
+  togglePipelineMode(
+    newMode: string,
+    callerUserId: string,
+    clock: Clock,
+  ): void {
+    if (!this.status.isActive()) {
+      throw SessionNotActiveException.forSession(this.sessionId);
+    }
+    if (callerUserId !== this.gmUserId) {
+      throw NotSessionGmException.forUser(callerUserId);
+    }
+
+    const targetMode = PipelineMode.fromString(newMode);
+    targetMode.ensureDifferentFrom(this.pipelineMode);
+
+    const event = new PipelineModeChanged(
+      this.sessionId,
+      this.campaignId,
+      this.gmUserId,
+      targetMode.toString(),
+      clock.now().toISOString(),
+    );
+
+    this.applyEvent(event);
+    this.uncommittedEvents.push(event);
+  }
+
   private applyEvent(event: SessionEvent): void {
     if (event instanceof SessionStarted) {
       this.sessionId = event.sessionId;
@@ -79,6 +111,8 @@ export class SessionAggregate {
       this.startedAt = event.startedAt;
     } else if (event instanceof SessionModeChanged) {
       this.mode = SessionMode.fromPrimitives(event.newMode);
+    } else if (event instanceof PipelineModeChanged) {
+      this.pipelineMode = PipelineMode.fromPrimitives(event.pipelineMode);
     } else {
       throw new Error(
         `Unexpected event type in applyEvent: ${(event as Record<string, unknown>).constructor?.name}`,
@@ -114,6 +148,17 @@ export class SessionAggregate {
             aggregate.requireString(d, 'changedAt', event.type),
           ),
         );
+      } else if (event.type === 'PipelineModeChanged') {
+        const d = event.data;
+        aggregate.applyEvent(
+          new PipelineModeChanged(
+            aggregate.requireString(d, 'sessionId', event.type),
+            aggregate.requireString(d, 'campaignId', event.type),
+            aggregate.requireString(d, 'gmUserId', event.type),
+            aggregate.requireString(d, 'pipelineMode', event.type),
+            aggregate.requireString(d, 'changedAt', event.type),
+          ),
+        );
       } else {
         throw new Error(`Unknown event type: ${event.type}`);
       }
@@ -140,6 +185,10 @@ export class SessionAggregate {
 
   getMode(): string {
     return this.mode.toString();
+  }
+
+  getPipelineMode(): string {
+    return this.pipelineMode.toString();
   }
 
   getStatus(): string {

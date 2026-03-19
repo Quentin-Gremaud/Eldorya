@@ -31,6 +31,7 @@ import { useEffect } from "react";
 import { useCampaignPlayers } from "@/hooks/use-campaign-players";
 import { PlayerPingPanel } from "@/components/features/action-pipeline/player-ping-panel";
 import { PendingActionQueue } from "@/components/features/action-pipeline/pending-action-queue";
+import { PipelineModeToggle } from "@/components/features/action-pipeline/pipeline-mode-toggle";
 
 export default function GmSessionCockpitPage({
   params,
@@ -220,15 +221,23 @@ export default function GmSessionCockpitPage({
 
           {/* GM Side Panel (live only) */}
           {isLive && (
-            <div className="w-64 shrink-0 rounded-lg border border-border bg-surface p-4">
-              <PlayerPingPanel
-                campaignId={campaignId}
-                sessionId={session.id}
-                players={players.map((p) => ({
-                  userId: p.userId,
-                  displayName: p.displayName,
-                }))}
-              />
+            <div className="w-64 shrink-0 space-y-4">
+              <div className="rounded-lg border border-border bg-surface p-4">
+                <PipelineModeToggle
+                  campaignId={campaignId}
+                  sessionId={session.id}
+                />
+              </div>
+              <div className="rounded-lg border border-border bg-surface p-4">
+                <PlayerPingPanel
+                  campaignId={campaignId}
+                  sessionId={session.id}
+                  players={players.map((p) => ({
+                    userId: p.userId,
+                    displayName: p.displayName,
+                  }))}
+                />
+              </div>
             </div>
           )}
         </div>

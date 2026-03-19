@@ -66,9 +66,31 @@ describe('SessionProjection', () => {
       });
 
       expect(mockPrisma.session.updateMany).toHaveBeenCalledWith({
-        where: { id: sessionId },
+        where: { id: sessionId, campaignId },
         data: { mode: 'live' },
       });
+    });
+  });
+
+  describe('handlePipelineModeChanged', () => {
+    it('should update session pipeline mode in read model', async () => {
+      await projection.handlePipelineModeChanged({
+        sessionId,
+        campaignId,
+        pipelineMode: 'mandatory',
+        changedAt: '2026-03-14T11:00:00.000Z',
+      });
+
+      expect(mockPrisma.session.updateMany).toHaveBeenCalledWith({
+        where: { id: sessionId, campaignId },
+        data: { pipelineMode: 'mandatory' },
+      });
+    });
+
+    it('should throw on missing required field', async () => {
+      await expect(
+        projection.handlePipelineModeChanged({ sessionId }),
+      ).rejects.toThrow('Invalid event data');
     });
   });
 });

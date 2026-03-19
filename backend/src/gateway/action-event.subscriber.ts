@@ -52,7 +52,7 @@ export class ActionEventSubscriber implements OnModuleInit, OnModuleDestroy {
       const subscription = client.subscribeToAll({
         fromPosition,
         filter: eventTypeFilter({
-          prefixes: ['PlayerPinged', 'ActionProposed', 'ActionValidated', 'ActionRejected', 'ActionQueueReordered'],
+          prefixes: ['PlayerPinged', 'ActionProposed', 'ActionValidated', 'ActionRejected', 'ActionQueueReordered', 'ActionCancelled'],
         }),
       });
 
@@ -79,6 +79,8 @@ export class ActionEventSubscriber implements OnModuleInit, OnModuleDestroy {
             await this.handleActionRejected(data, metadata);
           } else if (eventType === 'ActionQueueReordered') {
             await this.handleActionQueueReordered(data, metadata);
+          } else if (eventType === 'ActionCancelled') {
+            await this.handleActionCancelled(data, metadata);
           }
 
           const position = resolvedEvent.event?.position;
@@ -314,6 +316,62 @@ export class ActionEventSubscriber implements OnModuleInit, OnModuleDestroy {
 
     this.logger.log(
       `Emitted ActionRejected for action ${actionId} to player ${action.playerId} and GM in session ${sessionId}`,
+    );
+  }
+
+  private async handleActionCancelled(
+    data: Record<string, unknown>,
+    metadata: Record<string, unknown> | undefined,
+  ): Promise<void> {
+    const actionId = data.actionId as string;
+    const sessionId = data.sessionId as string;
+    const campaignId = data.campaignId as string;
+    const playerId = data.playerId as string;
+
+    const server = this.sessionGateway.server;
+    if (!server) return;
+
+    // Find GM userId from session read model
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { gmUserId: true },
+    });
+    if (!session) return;
+
+    // Emit to GM (action removed from queue)
+    const gmSockets = await this.roomManager.findSocketsByUserId(server, sessionId, session.gmUserId);
+    const gmPayload = {
+      type: 'ActionCancelled',
+      data: {
+        actionId,
+        sessionId,
+        campaignId,
+        playerId,
+        cancelledAt: data.cancelledAt,
+      },
+      metadata: { campaignId, timestamp: metadata?.timestamp },
+    };
+    for (const socket of gmSockets) {
+      socket.emit('ActionCancelled', gmPayload);
+    }
+
+    // Emit confirmation to cancelling player
+    const playerSockets = await this.roomManager.findSocketsByUserId(server, sessionId, playerId);
+    const playerPayload = {
+      type: 'ActionCancelledConfirmation',
+      data: {
+        actionId,
+        sessionId,
+        campaignId,
+      },
+      metadata: { campaignId, timestamp: metadata?.timestamp },
+    };
+    for (const socket of playerSockets) {
+      socket.emit('ActionCancelledConfirmation', playerPayload);
+    }
+
+    this.logger.log(
+      `Emitted ActionCancelled to GM and confirmation to player ${playerId} in session ${sessionId}`,
     );
   }
 

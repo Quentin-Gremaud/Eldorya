@@ -1,6 +1,6 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { Inject, Logger } from '@nestjs/common';
-import { ProposeActionCommand } from './propose-action.command.js';
+import { CancelActionCommand } from './cancel-action.command.js';
 import type { ActionPipelineRepository } from '../action-pipeline.repository.js';
 import { ACTION_PIPELINE_REPOSITORY } from '../action-pipeline.repository.js';
 import type { Clock } from '../../../shared/clock.js';
@@ -11,15 +11,12 @@ import type { SessionLivenessChecker } from '../session-liveness-checker.port.js
 import { SESSION_LIVENESS_CHECKER } from '../session-liveness-checker.port.js';
 import type { CampaignMembershipChecker } from '../campaign-membership-checker.port.js';
 import { CAMPAIGN_MEMBERSHIP_CHECKER } from '../campaign-membership-checker.port.js';
-import type { PipelineModeChecker } from '../pipeline-mode-checker.port.js';
-import { PIPELINE_MODE_CHECKER } from '../pipeline-mode-checker.port.js';
-import { PipelineModeMandatoryException } from '../exceptions/pipeline-mode-mandatory.exception.js';
 
-@CommandHandler(ProposeActionCommand)
-export class ProposeActionHandler
-  implements ICommandHandler<ProposeActionCommand>
+@CommandHandler(CancelActionCommand)
+export class CancelActionHandler
+  implements ICommandHandler<CancelActionCommand>
 {
-  private readonly logger = new Logger(ProposeActionHandler.name);
+  private readonly logger = new Logger(CancelActionHandler.name);
 
   constructor(
     @Inject(ACTION_PIPELINE_REPOSITORY)
@@ -30,11 +27,9 @@ export class ProposeActionHandler
     private readonly sessionLivenessChecker: SessionLivenessChecker,
     @Inject(CAMPAIGN_MEMBERSHIP_CHECKER)
     private readonly campaignMembershipChecker: CampaignMembershipChecker,
-    @Inject(PIPELINE_MODE_CHECKER)
-    private readonly pipelineModeChecker: PipelineModeChecker,
   ) {}
 
-  async execute(command: ProposeActionCommand): Promise<void> {
+  async execute(command: CancelActionCommand): Promise<void> {
     const liveSession = await this.sessionLivenessChecker.getLiveSession(
       command.sessionId,
       command.campaignId,
@@ -45,45 +40,25 @@ export class ProposeActionHandler
 
     const isMember = await this.campaignMembershipChecker.isMember(
       command.campaignId,
-      command.playerId,
+      command.callerUserId,
     );
     if (!isMember) {
-      throw PlayerNotInCampaignException.forPlayer(command.playerId, command.campaignId);
+      throw PlayerNotInCampaignException.forPlayer(command.callerUserId, command.campaignId);
     }
 
-    const aggregate = await this.repository.loadOrCreate(
-      command.sessionId,
-      command.campaignId,
-    );
+    const aggregate = await this.repository.load(command.sessionId);
 
-    const pipelineMode = await this.pipelineModeChecker.getPipelineMode(
-      command.sessionId,
-      command.campaignId,
-    );
-    if (pipelineMode === 'mandatory') {
-      const pingedPlayerIds = aggregate.getPingedPlayerIds();
-      if (!pingedPlayerIds.includes(command.playerId)) {
-        throw PipelineModeMandatoryException.forPlayer(command.playerId);
-      }
-    }
-
-    aggregate.proposeAction(
+    aggregate.cancelAction(
       command.actionId,
-      command.playerId,
-      command.actionType,
-      command.description,
-      command.target,
+      command.callerUserId,
+      command.callerUserId,
       this.clock,
     );
 
-    if (aggregate.isNew()) {
-      await this.repository.saveNew(aggregate);
-    } else {
-      await this.repository.save(aggregate);
-    }
+    await this.repository.save(aggregate);
 
     this.logger.log(
-      `ActionProposed event persisted for action ${command.actionId} in session ${command.sessionId}`,
+      `ActionCancelled event persisted for action ${command.actionId} in session ${command.sessionId}`,
     );
   }
 }

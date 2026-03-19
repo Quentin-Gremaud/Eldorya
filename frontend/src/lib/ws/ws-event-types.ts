@@ -8,6 +8,8 @@ export const WS_COMMANDS = {
   validateAction: 'validate-action',
   rejectAction: 'reject-action',
   reorderActionQueue: 'reorder-action-queue',
+  cancelAction: 'cancel-action',
+  togglePipelineMode: 'toggle-pipeline-mode',
 } as const;
 
 // Server → Client (PascalCase past tense)
@@ -23,4 +25,7 @@ export const WS_EVENTS = {
   ActionValidated: 'ActionValidated',
   ActionRejected: 'ActionRejected',
   ActionQueueReordered: 'ActionQueueReordered',
+  ActionCancelled: 'ActionCancelled',
+  ActionCancelledConfirmation: 'ActionCancelledConfirmation',
+  PipelineModeChanged: 'PipelineModeChanged',
 } as const;

@@ -52,7 +52,7 @@ export class SessionEventSubscriber implements OnModuleInit, OnModuleDestroy {
       const subscription = client.subscribeToAll({
         fromPosition,
         filter: eventTypeFilter({
-          prefixes: ['Session'],
+          prefixes: ['Session', 'PipelineMode'],
         }),
       });
 
@@ -69,7 +69,26 @@ export class SessionEventSubscriber implements OnModuleInit, OnModuleDestroy {
           const data = resolvedEvent.event.data as Record<string, unknown>;
           const metadata = resolvedEvent.event.metadata as Record<string, unknown> | undefined;
 
-          if (eventType === 'SessionModeChanged') {
+          if (eventType === 'PipelineModeChanged') {
+            const sessionId = data.sessionId as string;
+            const campaignId = data.campaignId as string;
+            const pipelineMode = data.pipelineMode as string;
+
+            const roomName = this.roomManager.getRoomName(sessionId);
+
+            // Broadcast to ALL sockets in the session room (GM + all players need to know)
+            this.sessionGateway.server?.to(roomName).emit('PipelineModeChanged', {
+              type: 'PipelineModeChanged',
+              data: { sessionId, campaignId, pipelineMode },
+              metadata: {
+                campaignId,
+                timestamp: metadata?.timestamp,
+              },
+            });
+            this.logger.log(
+              `Emitted PipelineModeChanged (${pipelineMode}) to room ${roomName}`,
+            );
+          } else if (eventType === 'SessionModeChanged') {
             const sessionId = data.sessionId as string;
             const campaignId = data.campaignId as string;
             const newMode = data.newMode as string;

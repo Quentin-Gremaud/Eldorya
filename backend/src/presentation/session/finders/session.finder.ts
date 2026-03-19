@@ -35,12 +35,28 @@ export class SessionFinder {
     };
   }
 
-  async findById(sessionId: string): Promise<SessionResult | null> {
+  async getPipelineMode(
+    sessionId: string,
+    campaignId: string,
+  ): Promise<{ pipelineMode: string } | null> {
+    const session = await this.prisma.session.findUnique({
+      where: { id: sessionId },
+      select: { pipelineMode: true, campaignId: true },
+    });
+    if (!session || session.campaignId !== campaignId) return null;
+    return { pipelineMode: session.pipelineMode };
+  }
+
+  async findById(
+    sessionId: string,
+    campaignId?: string,
+  ): Promise<SessionResult | null> {
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
     });
 
     if (!session) return null;
+    if (campaignId && session.campaignId !== campaignId) return null;
 
     return {
       id: session.id,

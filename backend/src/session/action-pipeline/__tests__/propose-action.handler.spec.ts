@@ -4,9 +4,11 @@ import { ActionPipelineAggregate } from '../action-pipeline.aggregate.js';
 import { InvalidActionProposalException } from '../exceptions/invalid-action-proposal.exception.js';
 import { SessionNotLiveException } from '../exceptions/session-not-live.exception.js';
 import { PlayerNotInCampaignException } from '../exceptions/player-not-in-campaign.exception.js';
+import { PipelineModeMandatoryException } from '../exceptions/pipeline-mode-mandatory.exception.js';
 import type { ActionPipelineRepository } from '../action-pipeline.repository.js';
 import type { SessionLivenessChecker } from '../session-liveness-checker.port.js';
 import type { CampaignMembershipChecker } from '../campaign-membership-checker.port.js';
+import type { PipelineModeChecker } from '../pipeline-mode-checker.port.js';
 import type { Clock } from '../../../shared/clock.js';
 
 describe('ProposeActionHandler', () => {
@@ -20,6 +22,7 @@ describe('ProposeActionHandler', () => {
   let mockClock: Clock;
   let mockSessionLivenessChecker: { getLiveSession: jest.Mock };
   let mockCampaignMembershipChecker: { isMember: jest.Mock };
+  let mockPipelineModeChecker: { getPipelineMode: jest.Mock };
 
   const sessionId = '550e8400-e29b-41d4-a716-446655440000';
   const campaignId = '660e8400-e29b-41d4-a716-446655440001';
@@ -53,11 +56,16 @@ describe('ProposeActionHandler', () => {
       isMember: jest.fn().mockResolvedValue(true),
     };
 
+    mockPipelineModeChecker = {
+      getPipelineMode: jest.fn().mockResolvedValue('optional'),
+    };
+
     handler = new ProposeActionHandler(
       mockRepository as unknown as ActionPipelineRepository,
       mockClock,
       mockSessionLivenessChecker as unknown as SessionLivenessChecker,
       mockCampaignMembershipChecker as unknown as CampaignMembershipChecker,
+      mockPipelineModeChecker as unknown as PipelineModeChecker,
     );
   });
 
@@ -142,5 +150,54 @@ describe('ProposeActionHandler', () => {
     );
     await expect(handler.execute(command)).rejects.toThrow(InvalidActionProposalException);
     expect(mockRepository.saveNew).not.toHaveBeenCalled();
+  });
+
+  it('should throw PipelineModeMandatoryException when pipeline mandatory and player not pinged', async () => {
+    mockPipelineModeChecker.getPipelineMode.mockResolvedValue('mandatory');
+    const newAggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+    mockRepository.loadOrCreate.mockResolvedValue(newAggregate);
+
+    const command = new ProposeActionCommand(
+      actionId, sessionId, campaignId, playerId, 'move', 'I move', null,
+    );
+    await expect(handler.execute(command)).rejects.toThrow(PipelineModeMandatoryException);
+    expect(mockRepository.saveNew).not.toHaveBeenCalled();
+  });
+
+  it('should allow proposal when pipeline mandatory and player is pinged', async () => {
+    mockPipelineModeChecker.getPipelineMode.mockResolvedValue('mandatory');
+    const aggregate = ActionPipelineAggregate.loadFromHistory(sessionId, [
+      {
+        type: 'PlayerPinged',
+        data: {
+          sessionId,
+          campaignId,
+          playerId,
+          gmUserId,
+          pingedAt: '2026-03-18T10:00:00.000Z',
+        },
+      },
+    ]);
+    mockRepository.loadOrCreate.mockResolvedValue(aggregate);
+
+    const command = new ProposeActionCommand(
+      actionId, sessionId, campaignId, playerId, 'move', 'I move', null,
+    );
+    await handler.execute(command);
+
+    expect(mockRepository.save).toHaveBeenCalledTimes(1);
+  });
+
+  it('should allow proposal when pipeline is optional regardless of ping status', async () => {
+    mockPipelineModeChecker.getPipelineMode.mockResolvedValue('optional');
+    const newAggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+    mockRepository.loadOrCreate.mockResolvedValue(newAggregate);
+
+    const command = new ProposeActionCommand(
+      actionId, sessionId, campaignId, playerId, 'move', 'I move', null,
+    );
+    await handler.execute(command);
+
+    expect(mockRepository.saveNew).toHaveBeenCalledTimes(1);
   });
 });

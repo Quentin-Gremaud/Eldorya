@@ -10,6 +10,7 @@ import { ActionProposed } from '../../session/action-pipeline/events/action-prop
 import { ActionValidated } from '../../session/action-pipeline/events/action-validated.event.js';
 import { ActionRejected } from '../../session/action-pipeline/events/action-rejected.event.js';
 import { ActionQueueReordered } from '../../session/action-pipeline/events/action-queue-reordered.event.js';
+import { ActionCancelled } from '../../session/action-pipeline/events/action-cancelled.event.js';
 import { KurrentDbService } from '../eventstore/kurrentdb.service.js';
 import type { Clock } from '../../shared/clock.js';
 import { CLOCK } from '../../shared/clock.js';
@@ -124,6 +125,15 @@ export class KurrentDbActionPipelineRepository implements ActionPipelineReposito
         orderedActionIds: event.orderedActionIds,
         gmUserId: event.gmUserId,
         reorderedAt: event.reorderedAt,
+      };
+    }
+    if (event instanceof ActionCancelled) {
+      return {
+        actionId: event.actionId,
+        sessionId: event.sessionId,
+        campaignId: event.campaignId,
+        playerId: event.playerId,
+        cancelledAt: event.cancelledAt,
       };
     }
     const _exhaustive: never = event;

@@ -3,6 +3,7 @@ import { ActionProposed } from './events/action-proposed.event.js';
 import { ActionValidated } from './events/action-validated.event.js';
 import { ActionRejected } from './events/action-rejected.event.js';
 import { ActionQueueReordered } from './events/action-queue-reordered.event.js';
+import { ActionCancelled } from './events/action-cancelled.event.js';
 import { ActionProposal } from './action-proposal.js';
 import { SessionId } from '../../shared/session-id.js';
 import { CampaignId } from '../../shared/campaign-id.js';
@@ -10,6 +11,7 @@ import { NotSessionGmException } from './exceptions/not-session-gm.exception.js'
 import { InvalidActionProposalException } from './exceptions/invalid-action-proposal.exception.js';
 import { ActionNotFoundException } from './exceptions/action-not-found.exception.js';
 import { ActionNotPendingException } from './exceptions/action-not-pending.exception.js';
+import { NotActionProposerException } from './exceptions/not-action-proposer.exception.js';
 import { FeedbackRequiredException } from './exceptions/feedback-required.exception.js';
 import { InvalidQueueReorderException } from './exceptions/invalid-queue-reorder.exception.js';
 import type { Clock } from '../../shared/clock.js';
@@ -19,7 +21,8 @@ export type ActionPipelineEvent =
   | ActionProposed
   | ActionValidated
   | ActionRejected
-  | ActionQueueReordered;
+  | ActionQueueReordered
+  | ActionCancelled;
 
 const MAX_NARRATIVE_NOTE_LENGTH = 1000;
 const MAX_FEEDBACK_LENGTH = 1000;
@@ -30,6 +33,7 @@ export class ActionPipelineAggregate {
   private pingedPlayerIds: Set<string> = new Set();
   private pendingActionIds: string[] = [];
   private resolvedActionIds: Set<string> = new Set();
+  private actionProposers: Map<string, string> = new Map();
   private uncommittedEvents: ActionPipelineEvent[] = [];
   private _isNew = false;
 
@@ -206,6 +210,34 @@ export class ActionPipelineAggregate {
     this.uncommittedEvents.push(event);
   }
 
+  cancelAction(
+    actionId: string,
+    playerId: string,
+    callerUserId: string,
+    clock: Clock,
+  ): void {
+    if (callerUserId !== playerId) {
+      throw NotActionProposerException.forPlayer(callerUserId);
+    }
+    this.ensureActionIsPending(actionId);
+
+    const proposer = this.actionProposers.get(actionId);
+    if (proposer !== playerId) {
+      throw NotActionProposerException.forPlayer(callerUserId);
+    }
+
+    const event = new ActionCancelled(
+      actionId,
+      this.sessionId,
+      this.campaignId,
+      playerId,
+      clock.now().toISOString(),
+    );
+
+    this.applyEvent(event);
+    this.uncommittedEvents.push(event);
+  }
+
   private ensureActionIsPending(actionId: string): void {
     if (!this.pendingActionIds.includes(actionId) && !this.resolvedActionIds.has(actionId)) {
       throw ActionNotFoundException.forAction(actionId);
@@ -224,12 +256,19 @@ export class ActionPipelineAggregate {
       this.sessionId = event.sessionId;
       this.campaignId = event.campaignId;
       this.pendingActionIds.push(event.actionId);
+      this.actionProposers.set(event.actionId, event.playerId);
     } else if (event instanceof ActionValidated) {
       this.pendingActionIds = this.pendingActionIds.filter((id) => id !== event.actionId);
       this.resolvedActionIds.add(event.actionId);
+      this.actionProposers.delete(event.actionId);
     } else if (event instanceof ActionRejected) {
       this.pendingActionIds = this.pendingActionIds.filter((id) => id !== event.actionId);
       this.resolvedActionIds.add(event.actionId);
+      this.actionProposers.delete(event.actionId);
+    } else if (event instanceof ActionCancelled) {
+      this.pendingActionIds = this.pendingActionIds.filter((id) => id !== event.actionId);
+      this.resolvedActionIds.add(event.actionId);
+      this.actionProposers.delete(event.actionId);
     } else if (event instanceof ActionQueueReordered) {
       this.pendingActionIds = [...event.orderedActionIds];
     } else {
@@ -294,6 +333,17 @@ export class ActionPipelineAggregate {
             aggregate.requireString(d, 'gmUserId', event.type),
             aggregate.requireString(d, 'feedback', event.type),
             aggregate.requireString(d, 'rejectedAt', event.type),
+          ),
+        );
+      } else if (event.type === 'ActionCancelled') {
+        const d = event.data;
+        aggregate.applyEvent(
+          new ActionCancelled(
+            aggregate.requireString(d, 'actionId', event.type),
+            aggregate.requireString(d, 'sessionId', event.type),
+            aggregate.requireString(d, 'campaignId', event.type),
+            aggregate.requireString(d, 'playerId', event.type),
+            aggregate.requireString(d, 'cancelledAt', event.type),
           ),
         );
       } else if (event.type === 'ActionQueueReordered') {

@@ -320,6 +320,58 @@ describe('KurrentDbActionPipelineRepository', () => {
     });
   });
 
+  describe('ActionCancelled serialization', () => {
+    it('should serialize ActionCancelled event correctly', async () => {
+      const aggregate = ActionPipelineAggregate.loadFromHistory(sessionId, [
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId, sessionId, campaignId, playerId,
+            actionType: 'move', description: 'I move', target: null,
+            proposedAt: '2026-03-18T09:00:00.000Z',
+          },
+        },
+      ]);
+      aggregate.cancelAction(actionId, playerId, playerId, clock);
+
+      await repository.save(aggregate);
+
+      const events = mockKurrentDb.appendEventsToStream.mock.calls[0][1];
+      expect(events[0].eventType).toBe('ActionCancelled');
+      expect(events[0].data).toEqual({
+        actionId,
+        sessionId,
+        campaignId,
+        playerId,
+        cancelledAt: fixedDate.toISOString(),
+      });
+    });
+
+    it('should round-trip ActionCancelled through load', async () => {
+      mockKurrentDb.readStream.mockResolvedValue([
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId, sessionId, campaignId, playerId,
+            actionType: 'move', description: 'I move', target: null,
+            proposedAt: '2026-03-18T09:00:00.000Z',
+          },
+        },
+        {
+          type: 'ActionCancelled',
+          data: {
+            actionId, sessionId, campaignId, playerId,
+            cancelledAt: '2026-03-18T10:00:00.000Z',
+          },
+        },
+      ]);
+
+      const aggregate = await repository.load(sessionId);
+
+      expect(aggregate.getPendingActionIds()).not.toContain(actionId);
+    });
+  });
+
   describe('ActionQueueReordered serialization', () => {
     const actionId2 = '880e8400-e29b-41d4-a716-446655440003';
 

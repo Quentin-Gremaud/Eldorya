@@ -379,7 +379,17 @@ export interface ProposeActionPayload {
   target?: string;
 }
 
-export type ActionStatus = "pending" | "validated" | "rejected";
+export type ActionStatus = "pending" | "validated" | "rejected" | "cancelled";
+
+export type PipelineMode = "optional" | "mandatory";
+
+export interface PipelineModeResponse {
+  pipelineMode: PipelineMode;
+}
+
+export interface TogglePipelineModePayload {
+  pipelineMode: PipelineMode;
+}
 
 export interface ValidateActionPayload {
   narrativeNote?: string;

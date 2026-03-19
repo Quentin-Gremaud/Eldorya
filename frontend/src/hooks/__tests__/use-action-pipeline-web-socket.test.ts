@@ -2,7 +2,7 @@ import { renderHook, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { useActionPipelineWebSocket } from "../use-action-pipeline-web-socket";
-import type { PendingAction, PingStatus } from "@/types/api";
+import type { PendingAction, PingStatus, PipelineMode } from "@/types/api";
 
 const listeners: Record<string, ((...args: unknown[]) => void)[]> = {};
 const mockSocket = {
@@ -206,9 +206,9 @@ describe("useActionPipelineWebSocket", () => {
       { wrapper: Wrapper }
     );
 
-    expect(mockSocket.on).toHaveBeenCalledTimes(7);
+    expect(mockSocket.on).toHaveBeenCalledTimes(10);
     unmount();
-    expect(mockSocket.off).toHaveBeenCalledTimes(7);
+    expect(mockSocket.off).toHaveBeenCalledTimes(10);
   });
 
   it("should remove action from pending on ActionValidated event", () => {
@@ -403,5 +403,105 @@ describe("useActionPipelineWebSocket", () => {
     ]);
     expect(actions).toHaveLength(1);
     expect(actions?.[0].id).toBe("a1");
+  });
+
+  it("should remove action from pending on ActionCancelled event", () => {
+    const { queryClient, Wrapper } = createWrapper();
+    const existing: PendingAction = {
+      id: "a1", sessionId: "s1", campaignId: "c1", playerId: "p1",
+      actionType: "move", description: "I move", target: null,
+      status: "pending", proposedAt: "2026-03-18T10:05:00.000Z",
+    };
+    queryClient.setQueryData(["actions", "c1", "s1", "pending"], [existing]);
+
+    renderHook(() => useActionPipelineWebSocket("c1", "s1"), {
+      wrapper: Wrapper,
+    });
+
+    act(() => {
+      emit("ActionCancelled", {
+        type: "ActionCancelled",
+        data: {
+          actionId: "a1",
+          sessionId: "s1",
+          campaignId: "c1",
+          playerId: "p1",
+          cancelledAt: "2026-03-18T10:10:00.000Z",
+        },
+      });
+    });
+
+    const actions = queryClient.getQueryData<PendingAction[]>([
+      "actions", "c1", "s1", "pending",
+    ]);
+    expect(actions).toHaveLength(0);
+  });
+
+  it("should call onActionCancelled callback", () => {
+    const { Wrapper } = createWrapper();
+    const onActionCancelled = jest.fn();
+
+    renderHook(
+      () => useActionPipelineWebSocket("c1", "s1", { onActionCancelled }),
+      { wrapper: Wrapper }
+    );
+
+    act(() => {
+      emit("ActionCancelled", {
+        type: "ActionCancelled",
+        data: {
+          actionId: "a1",
+          sessionId: "s1",
+          campaignId: "c1",
+          playerId: "p1",
+          cancelledAt: "2026-03-18T10:10:00.000Z",
+        },
+      });
+    });
+
+    expect(onActionCancelled).toHaveBeenCalledWith("a1");
+  });
+
+  it("should call onActionCancelledConfirmation callback", () => {
+    const { Wrapper } = createWrapper();
+    const onActionCancelledConfirmation = jest.fn();
+
+    renderHook(
+      () => useActionPipelineWebSocket("c1", "s1", { onActionCancelledConfirmation }),
+      { wrapper: Wrapper }
+    );
+
+    act(() => {
+      emit("ActionCancelledConfirmation", {
+        type: "ActionCancelledConfirmation",
+        data: { actionId: "a1", sessionId: "s1", campaignId: "c1" },
+      });
+    });
+
+    expect(onActionCancelledConfirmation).toHaveBeenCalledWith("a1");
+  });
+
+  it("should update pipeline mode cache on PipelineModeChanged event", () => {
+    const { queryClient, Wrapper } = createWrapper();
+
+    renderHook(() => useActionPipelineWebSocket("c1", "s1"), {
+      wrapper: Wrapper,
+    });
+
+    act(() => {
+      emit("PipelineModeChanged", {
+        type: "PipelineModeChanged",
+        data: {
+          sessionId: "s1",
+          campaignId: "c1",
+          pipelineMode: "mandatory",
+        },
+      });
+    });
+
+    const mode = queryClient.getQueryData<PipelineMode>([
+      "session", "c1", "s1", "pipeline-mode",
+    ]);
+    expect(mode).toBe("mandatory");
   });
 });

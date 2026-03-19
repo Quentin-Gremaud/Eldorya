@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWebSocketContext } from "@/providers/web-socket-provider";
 import { WS_EVENTS } from "@/lib/ws/ws-event-types";
-import type { PendingAction, PingStatus } from "@/types/api";
+import type { PendingAction, PingStatus, PipelineMode } from "@/types/api";
 
 interface ActionProposedPayload {
   type: string;
@@ -72,10 +72,41 @@ interface ActionQueueReorderedPayload {
   };
 }
 
+interface ActionCancelledPayload {
+  type: string;
+  data: {
+    actionId: string;
+    sessionId: string;
+    campaignId: string;
+    playerId: string;
+    cancelledAt: string;
+  };
+}
+
+interface ActionCancelledConfirmationPayload {
+  type: string;
+  data: {
+    actionId: string;
+    sessionId: string;
+    campaignId: string;
+  };
+}
+
+interface PipelineModeChangedPayload {
+  type: string;
+  data: {
+    sessionId: string;
+    campaignId: string;
+    pipelineMode: string;
+  };
+}
+
 interface ActionPipelineWebSocketOptions {
   onActionConfirmed?: (actionId: string) => void;
   onActionValidated?: (actionId: string, narrativeNote: string | null) => void;
   onActionRejected?: (actionId: string, feedback: string) => void;
+  onActionCancelled?: (actionId: string) => void;
+  onActionCancelledConfirmation?: (actionId: string) => void;
 }
 
 export function useActionPipelineWebSocket(
@@ -169,6 +200,38 @@ export function useActionPipelineWebSocket(
       });
     };
 
+    const handleActionCancelled = (payload: ActionCancelledPayload) => {
+      if (payload.data.campaignId !== campaignId) return;
+
+      queryClient.setQueryData<PendingAction[]>(pendingKey, (old) =>
+        (old ?? []).filter((a) => a.id !== payload.data.actionId)
+      );
+
+      options?.onActionCancelled?.(payload.data.actionId);
+    };
+
+    const handleActionCancelledConfirmation = (
+      payload: ActionCancelledConfirmationPayload
+    ) => {
+      if (payload.data.campaignId !== campaignId) return;
+      options?.onActionCancelledConfirmation?.(payload.data.actionId);
+    };
+
+    const handlePipelineModeChanged = (payload: PipelineModeChangedPayload) => {
+      if (payload.data.campaignId !== campaignId) return;
+
+      const pipelineModeKey = [
+        "session",
+        campaignId,
+        sessionId,
+        "pipeline-mode",
+      ];
+      queryClient.setQueryData<PipelineMode>(
+        pipelineModeKey,
+        payload.data.pipelineMode as PipelineMode
+      );
+    };
+
     socket.on(WS_EVENTS.PlayerPinged, handlePlayerPinged);
     socket.on(WS_EVENTS.PlayerPingedGm, handlePlayerPingedGm);
     socket.on(WS_EVENTS.ActionProposed, handleActionProposed);
@@ -179,6 +242,12 @@ export function useActionPipelineWebSocket(
     socket.on(WS_EVENTS.ActionValidated, handleActionValidated);
     socket.on(WS_EVENTS.ActionRejected, handleActionRejected);
     socket.on(WS_EVENTS.ActionQueueReordered, handleActionQueueReordered);
+    socket.on(WS_EVENTS.ActionCancelled, handleActionCancelled);
+    socket.on(
+      WS_EVENTS.ActionCancelledConfirmation,
+      handleActionCancelledConfirmation
+    );
+    socket.on(WS_EVENTS.PipelineModeChanged, handlePipelineModeChanged);
 
     return () => {
       socket.off(WS_EVENTS.PlayerPinged, handlePlayerPinged);
@@ -191,6 +260,12 @@ export function useActionPipelineWebSocket(
       socket.off(WS_EVENTS.ActionValidated, handleActionValidated);
       socket.off(WS_EVENTS.ActionRejected, handleActionRejected);
       socket.off(WS_EVENTS.ActionQueueReordered, handleActionQueueReordered);
+      socket.off(WS_EVENTS.ActionCancelled, handleActionCancelled);
+      socket.off(
+        WS_EVENTS.ActionCancelledConfirmation,
+        handleActionCancelledConfirmation
+      );
+      socket.off(WS_EVENTS.PipelineModeChanged, handlePipelineModeChanged);
     };
-  }, [socket, campaignId, sessionId, queryClient, options?.onActionConfirmed, options?.onActionValidated, options?.onActionRejected]);
+  }, [socket, campaignId, sessionId, queryClient, options?.onActionConfirmed, options?.onActionValidated, options?.onActionRejected, options?.onActionCancelled, options?.onActionCancelledConfirmation]);
 }

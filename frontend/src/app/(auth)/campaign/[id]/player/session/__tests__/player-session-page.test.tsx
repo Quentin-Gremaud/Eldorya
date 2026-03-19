@@ -94,6 +94,21 @@ jest.mock("@/hooks/use-action-pipeline-web-socket", () => ({
   useActionPipelineWebSocket: jest.fn(),
 }));
 
+jest.mock("@/hooks/use-pipeline-mode", () => ({
+  usePipelineMode: () => ({
+    pipelineMode: "optional",
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
+jest.mock("@/hooks/use-cancel-action", () => ({
+  useCancelAction: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+  }),
+}));
+
 jest.mock("@/components/canvas/map-canvas", () => ({
   MapCanvas: () =>
     createElement("div", { "data-testid": "map-canvas" }, "MapCanvas"),

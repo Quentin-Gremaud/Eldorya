@@ -19,6 +19,8 @@ import { ProposeActionCommand } from '../session/action-pipeline/commands/propos
 import { ValidateActionCommand } from '../session/action-pipeline/commands/validate-action.command.js';
 import { RejectActionCommand } from '../session/action-pipeline/commands/reject-action.command.js';
 import { ReorderActionQueueCommand } from '../session/action-pipeline/commands/reorder-action-queue.command.js';
+import { CancelActionCommand } from '../session/action-pipeline/commands/cancel-action.command.js';
+import { TogglePipelineModeCommand } from '../session/session/commands/toggle-pipeline-mode.command.js';
 
 const ALLOWED_ACTION_TYPES = ['move', 'attack', 'interact', 'free-text'] as const;
 const MAX_DESCRIPTION_LENGTH = 500;
@@ -396,6 +398,105 @@ export class SessionGateway
     } catch (err) {
       this.logger.error(`Failed to reorder action queue: ${err instanceof Error ? err.message : String(err)}`);
       return { success: false, error: 'Failed to reorder action queue' };
+    }
+  }
+
+  @SubscribeMessage('cancel-action')
+  async handleCancelAction(
+    client: AuthenticatedSocket,
+    payload: {
+      sessionId: string;
+      campaignId: string;
+      actionId: string;
+    },
+  ): Promise<{ success: boolean; error?: string }> {
+    const { sessionId, campaignId, actionId } = payload;
+
+    if (!sessionId || typeof sessionId !== 'string' || !UUID_REGEX.test(sessionId)) {
+      return { success: false, error: 'Invalid sessionId' };
+    }
+    if (!campaignId || typeof campaignId !== 'string' || !UUID_REGEX.test(campaignId)) {
+      return { success: false, error: 'Invalid campaignId' };
+    }
+    if (!actionId || typeof actionId !== 'string' || !UUID_REGEX.test(actionId)) {
+      return { success: false, error: 'Invalid actionId' };
+    }
+
+    const session = await this.sessionFinder.findById(sessionId);
+    if (!session || session.campaignId !== campaignId) {
+      return { success: false, error: 'Session not found' };
+    }
+    if (session.mode !== 'live') {
+      return { success: false, error: 'Session is not in live mode' };
+    }
+
+    // Verify caller is a campaign member
+    const isMember = await this.isCampaignMember(campaignId, client.userId);
+    if (!isMember) {
+      return { success: false, error: 'Not a campaign member' };
+    }
+
+    try {
+      await this.commandBus.execute(
+        new CancelActionCommand(
+          actionId,
+          sessionId,
+          campaignId,
+          client.userId,
+        ),
+      );
+      return { success: true };
+    } catch (err) {
+      this.logger.error(`Failed to cancel action: ${err instanceof Error ? err.message : String(err)}`);
+      return { success: false, error: 'Failed to cancel action' };
+    }
+  }
+
+  @SubscribeMessage('toggle-pipeline-mode')
+  async handleTogglePipelineMode(
+    client: AuthenticatedSocket,
+    payload: {
+      sessionId: string;
+      campaignId: string;
+      pipelineMode: string;
+    },
+  ): Promise<{ success: boolean; error?: string }> {
+    const { sessionId, campaignId, pipelineMode } = payload;
+
+    if (!sessionId || typeof sessionId !== 'string') {
+      return { success: false, error: 'Invalid sessionId' };
+    }
+    if (!campaignId || typeof campaignId !== 'string') {
+      return { success: false, error: 'Invalid campaignId' };
+    }
+    if (!pipelineMode || (pipelineMode !== 'optional' && pipelineMode !== 'mandatory')) {
+      return { success: false, error: 'Invalid pipelineMode: must be "optional" or "mandatory"' };
+    }
+
+    const session = await this.sessionFinder.findById(sessionId);
+    if (!session || session.campaignId !== campaignId) {
+      return { success: false, error: 'Session not found' };
+    }
+    if (session.gmUserId !== client.userId) {
+      return { success: false, error: 'Only the GM can toggle pipeline mode' };
+    }
+    if (session.mode !== 'live') {
+      return { success: false, error: 'Session is not in live mode' };
+    }
+
+    try {
+      await this.commandBus.execute(
+        new TogglePipelineModeCommand(
+          sessionId,
+          campaignId,
+          client.userId,
+          pipelineMode,
+        ),
+      );
+      return { success: true };
+    } catch (err) {
+      this.logger.error(`Failed to toggle pipeline mode: ${err instanceof Error ? err.message : String(err)}`);
+      return { success: false, error: 'Failed to toggle pipeline mode' };
     }
   }
 }

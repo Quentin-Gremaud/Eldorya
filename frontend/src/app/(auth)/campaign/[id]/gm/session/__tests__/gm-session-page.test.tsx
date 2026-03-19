@@ -73,6 +73,28 @@ jest.mock("@/hooks/use-action-pipeline-web-socket", () => ({
   useActionPipelineWebSocket: jest.fn(),
 }));
 
+jest.mock("@/hooks/use-pipeline-mode", () => ({
+  usePipelineMode: () => ({
+    pipelineMode: "optional",
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
+jest.mock("@/hooks/use-toggle-pipeline-mode", () => ({
+  useTogglePipelineMode: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+  }),
+}));
+
+jest.mock("@/hooks/use-cancel-action", () => ({
+  useCancelAction: () => ({
+    mutate: jest.fn(),
+    isPending: false,
+  }),
+}));
+
 jest.mock("@/components/canvas/map-canvas", () => ({
   MapCanvas: () => createElement("div", { "data-testid": "map-canvas" }, "Mocked MapCanvas"),
 }));
@@ -316,6 +338,36 @@ describe("GmSessionCockpitPage", () => {
 
     const backButton = screen.getByLabelText("Back to campaign");
     expect(backButton).toHaveAttribute("href", "/campaign/campaign-123/gm/prep");
+  });
+
+  it("shows PipelineModeToggle when session is in live mode", () => {
+    mockUseActiveSession.mockReturnValue({
+      session: { id: "session-1", mode: "live" },
+      isLoading: false,
+      isError: false,
+    });
+
+    render(
+      <GmSessionCockpitPage params={Promise.resolve({ id: "campaign-123" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    expect(screen.getByLabelText("Toggle mandatory pipeline mode")).toBeInTheDocument();
+  });
+
+  it("does not show PipelineModeToggle when session is in preparation mode", () => {
+    mockUseActiveSession.mockReturnValue({
+      session: { id: "session-1", mode: "preparation" },
+      isLoading: false,
+      isError: false,
+    });
+
+    render(
+      <GmSessionCockpitPage params={Promise.resolve({ id: "campaign-123" })} />,
+      { wrapper: createWrapper() }
+    );
+
+    expect(screen.queryByLabelText("Toggle mandatory pipeline mode")).not.toBeInTheDocument();
   });
 
   it("renders breadcrumb with Dashboard, campaign name, and Session", () => {

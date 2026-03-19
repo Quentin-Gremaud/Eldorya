@@ -211,6 +211,32 @@ describe('ActionProjection', () => {
     });
   });
 
+  describe('handleActionCancelled', () => {
+    it('should update action status to cancelled', async () => {
+      await projection.handleActionCancelled({
+        actionId,
+        sessionId,
+        campaignId,
+        playerId,
+        cancelledAt: '2026-03-18T10:10:00.000Z',
+      });
+
+      expect(mockPrisma.sessionAction.updateMany).toHaveBeenCalledWith({
+        where: { id: actionId, campaignId },
+        data: {
+          status: 'cancelled',
+          resolvedAt: new Date('2026-03-18T10:10:00.000Z'),
+        },
+      });
+    });
+
+    it('should throw on missing required field', async () => {
+      await expect(
+        projection.handleActionCancelled({ actionId }),
+      ).rejects.toThrow('Invalid event data');
+    });
+  });
+
   describe('handleActionQueueReordered', () => {
     const actionId2 = '880e8400-e29b-41d4-a716-446655440003';
 

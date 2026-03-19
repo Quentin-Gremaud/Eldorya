@@ -4,6 +4,7 @@ import type { SessionRepository } from '../../session/session/session.repository
 import { SessionAggregate, type SessionEvent } from '../../session/session/session.aggregate.js';
 import { SessionStarted } from '../../session/session/events/session-started.event.js';
 import { SessionModeChanged } from '../../session/session/events/session-mode-changed.event.js';
+import { PipelineModeChanged } from '../../session/session/events/pipeline-mode-changed.event.js';
 import { KurrentDbService } from '../eventstore/kurrentdb.service.js';
 import type { Clock } from '../../shared/clock.js';
 import { CLOCK } from '../../shared/clock.js';
@@ -79,6 +80,15 @@ export class KurrentDbSessionRepository implements SessionRepository {
         sessionId: event.sessionId,
         campaignId: event.campaignId,
         newMode: event.newMode,
+        changedAt: event.changedAt,
+      };
+    }
+    if (event instanceof PipelineModeChanged) {
+      return {
+        sessionId: event.sessionId,
+        campaignId: event.campaignId,
+        gmUserId: event.gmUserId,
+        pipelineMode: event.pipelineMode,
         changedAt: event.changedAt,
       };
     }

@@ -106,6 +106,55 @@ describe('KurrentDbSessionRepository', () => {
     });
   });
 
+  describe('PipelineModeChanged serialization', () => {
+    it('should serialize PipelineModeChanged event correctly', async () => {
+      const aggregate = SessionAggregate.start(sessionId, campaignId, gmUserId, clock);
+      aggregate.clearEvents();
+      aggregate.togglePipelineMode('mandatory', gmUserId, clock);
+
+      await repository.save(aggregate);
+
+      const events = mockKurrentDb.appendEventsToStream.mock.calls[0][1];
+      expect(events[0].eventType).toBe('PipelineModeChanged');
+      expect(events[0].data).toEqual({
+        sessionId,
+        campaignId,
+        gmUserId,
+        pipelineMode: 'mandatory',
+        changedAt: fixedDate.toISOString(),
+      });
+    });
+
+    it('should round-trip PipelineModeChanged through load', async () => {
+      mockKurrentDb.readStream.mockResolvedValue([
+        {
+          type: 'SessionStarted',
+          data: {
+            sessionId,
+            campaignId,
+            gmUserId,
+            mode: 'preparation',
+            startedAt: fixedDate.toISOString(),
+          },
+        },
+        {
+          type: 'PipelineModeChanged',
+          data: {
+            sessionId,
+            campaignId,
+            gmUserId,
+            pipelineMode: 'mandatory',
+            changedAt: '2026-03-14T11:00:00.000Z',
+          },
+        },
+      ]);
+
+      const aggregate = await repository.load(sessionId);
+
+      expect(aggregate.getPipelineMode()).toBe('mandatory');
+    });
+  });
+
   describe('load', () => {
     it('should reconstruct aggregate from events', async () => {
       mockKurrentDb.readStream.mockResolvedValue([

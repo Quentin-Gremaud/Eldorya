@@ -95,5 +95,17 @@ export function createActionsApi(apiFetch: ApiFetch) {
           body: JSON.stringify(payload),
         }
       ),
+
+    cancelAction: (
+      campaignId: string,
+      sessionId: string,
+      actionId: string
+    ) =>
+      apiFetch<void>(
+        `/api/campaigns/${campaignId}/sessions/${sessionId}/actions/${actionId}/cancel`,
+        {
+          method: "POST",
+        }
+      ),
   };
 }

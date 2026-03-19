@@ -4,10 +4,12 @@ import { ActionProposed } from '../events/action-proposed.event.js';
 import { ActionValidated } from '../events/action-validated.event.js';
 import { ActionRejected } from '../events/action-rejected.event.js';
 import { ActionQueueReordered } from '../events/action-queue-reordered.event.js';
+import { ActionCancelled } from '../events/action-cancelled.event.js';
 import { InvalidActionProposalException } from '../exceptions/invalid-action-proposal.exception.js';
 import { NotSessionGmException } from '../exceptions/not-session-gm.exception.js';
 import { ActionNotFoundException } from '../exceptions/action-not-found.exception.js';
 import { ActionNotPendingException } from '../exceptions/action-not-pending.exception.js';
+import { NotActionProposerException } from '../exceptions/not-action-proposer.exception.js';
 import { FeedbackRequiredException } from '../exceptions/feedback-required.exception.js';
 import { InvalidQueueReorderException } from '../exceptions/invalid-queue-reorder.exception.js';
 import type { Clock } from '../../../shared/clock.js';
@@ -827,6 +829,175 @@ describe('ActionPipelineAggregate', () => {
       aggregate.validateAction(actionId, gmUserId, gmUserId, null, clock);
 
       expect(aggregate.getPendingActionIds()).toEqual([actionId3, actionId2]);
+    });
+  });
+
+  describe('cancelAction', () => {
+    it('should emit an ActionCancelled event for a pending action', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      aggregate.clearEvents();
+
+      aggregate.cancelAction(actionId, playerId, playerId, clock);
+
+      const events = aggregate.getUncommittedEvents();
+      expect(events).toHaveLength(1);
+      expect(events[0]).toBeInstanceOf(ActionCancelled);
+
+      const event = events[0] as ActionCancelled;
+      expect(event.actionId).toBe(actionId);
+      expect(event.sessionId).toBe(sessionId);
+      expect(event.campaignId).toBe(campaignId);
+      expect(event.playerId).toBe(playerId);
+      expect(event.cancelledAt).toBe(fixedDate.toISOString());
+    });
+
+    it('should remove action from pending after cancellation', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+
+      aggregate.cancelAction(actionId, playerId, playerId, clock);
+
+      expect(aggregate.getPendingActionIds()).not.toContain(actionId);
+    });
+
+    it('should throw NotActionProposerException if caller is not the proposer', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+
+      expect(() =>
+        aggregate.cancelAction(actionId, playerId, 'other-user', clock),
+      ).toThrow(NotActionProposerException);
+    });
+
+    it('should throw NotActionProposerException if callerUserId does not match playerId', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+
+      expect(() =>
+        aggregate.cancelAction(actionId, 'other-player', 'other-player', clock),
+      ).toThrow(NotActionProposerException);
+    });
+
+    it('should throw ActionNotPendingException for already validated action', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      aggregate.validateAction(actionId, gmUserId, gmUserId, null, clock);
+
+      expect(() =>
+        aggregate.cancelAction(actionId, playerId, playerId, clock),
+      ).toThrow(ActionNotPendingException);
+    });
+
+    it('should throw ActionNotPendingException for already rejected action', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      aggregate.rejectAction(actionId, gmUserId, gmUserId, 'Not allowed', clock);
+
+      expect(() =>
+        aggregate.cancelAction(actionId, playerId, playerId, clock),
+      ).toThrow(ActionNotPendingException);
+    });
+
+    it('should throw ActionNotFoundException for non-existent action', () => {
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+
+      expect(() =>
+        aggregate.cancelAction('non-existent-id', playerId, playerId, clock),
+      ).toThrow(ActionNotFoundException);
+    });
+
+    it('should preserve queue order for remaining actions after cancel', () => {
+      const actionId2 = '770e8400-e29b-41d4-a716-446655440003';
+      const actionId3 = '770e8400-e29b-41d4-a716-446655440004';
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      aggregate.proposeAction(actionId2, playerId, 'attack', 'I attack', null, clock);
+      aggregate.proposeAction(actionId3, playerId, 'interact', 'I interact', null, clock);
+
+      aggregate.cancelAction(actionId2, playerId, playerId, clock);
+
+      expect(aggregate.getPendingActionIds()).toEqual([actionId, actionId3]);
+    });
+
+    it('should allow proposing a new action after cancellation', () => {
+      const newActionId = '770e8400-e29b-41d4-a716-446655440005';
+      const aggregate = ActionPipelineAggregate.create(sessionId, campaignId);
+      aggregate.proposeAction(actionId, playerId, 'move', 'I move north', null, clock);
+      aggregate.cancelAction(actionId, playerId, playerId, clock);
+
+      aggregate.proposeAction(newActionId, playerId, 'attack', 'I attack', null, clock);
+
+      expect(aggregate.getPendingActionIds()).toContain(newActionId);
+      expect(aggregate.getPendingActionIds()).not.toContain(actionId);
+    });
+  });
+
+  describe('loadFromHistory with ActionCancelled', () => {
+    it('should reconstruct aggregate from ActionCancelled event', () => {
+      const events = [
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            playerId,
+            actionType: 'move',
+            description: 'I move north',
+            target: null,
+            proposedAt: '2026-03-18T10:00:00.000Z',
+          },
+        },
+        {
+          type: 'ActionCancelled',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            playerId,
+            cancelledAt: '2026-03-18T10:01:00.000Z',
+          },
+        },
+      ];
+
+      const aggregate = ActionPipelineAggregate.loadFromHistory(sessionId, events);
+
+      expect(aggregate.getPendingActionIds()).not.toContain(actionId);
+    });
+
+    it('should prevent cancellation of already-cancelled action from history', () => {
+      const events = [
+        {
+          type: 'ActionProposed',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            playerId,
+            actionType: 'move',
+            description: 'I move',
+            target: null,
+            proposedAt: '2026-03-18T10:00:00.000Z',
+          },
+        },
+        {
+          type: 'ActionCancelled',
+          data: {
+            actionId,
+            sessionId,
+            campaignId,
+            playerId,
+            cancelledAt: '2026-03-18T10:01:00.000Z',
+          },
+        },
+      ];
+
+      const aggregate = ActionPipelineAggregate.loadFromHistory(sessionId, events);
+
+      expect(() =>
+        aggregate.cancelAction(actionId, playerId, playerId, clock),
+      ).toThrow(ActionNotPendingException);
     });
   });
 
