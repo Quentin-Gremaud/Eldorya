@@ -47,6 +47,7 @@ describe('SessionGateway - action handlers', () => {
     gateway = new SessionGateway(
       {} as any,
       new RoomManagerService(),
+      { recordActivity: jest.fn(), playerConnected: jest.fn(), playerDisconnected: jest.fn() } as any,
       mockSessionFinder as unknown as SessionFinder,
       mockCommandBus as any,
       mockPrisma as any,

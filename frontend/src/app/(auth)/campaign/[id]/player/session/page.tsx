@@ -2,12 +2,14 @@
 
 import { use, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 import { useActiveSession } from "@/hooks/use-active-session";
 import { useSessionWebSocket } from "@/hooks/use-session-web-socket";
 import { useMapLevels } from "@/hooks/use-map-levels";
 import { useTokens } from "@/hooks/use-tokens";
 import { useFogState } from "@/hooks/use-fog-state";
 import { useCampaign } from "@/hooks/use-campaign";
+import { useCampaignPlayers } from "@/hooks/use-campaign-players";
 import { useWebSocketContext } from "@/providers/web-socket-provider";
 import { WS_COMMANDS } from "@/lib/ws/ws-event-types";
 import { MapCanvas } from "@/components/canvas/map-canvas";
@@ -28,10 +30,15 @@ export default function PlayerSessionPage({
 }) {
   const { id: campaignId } = use(params);
   const router = useRouter();
+  const { user } = useUser();
   const { campaign } = useCampaign(campaignId);
   const { session, isLoading: isSessionLoading } = useActiveSession(campaignId);
   const { socket } = useWebSocketContext();
   const { mapLevels } = useMapLevels(campaignId);
+  const { players } = useCampaignPlayers(campaignId);
+
+  // Resolve current user's playerId from campaign players
+  const playerId = players.find((p) => p.userId === user?.id)?.userId ?? null;
 
   const [selectedMapLevelId, setSelectedMapLevelId] = useState<string | null>(null);
 
@@ -63,7 +70,7 @@ export default function PlayerSessionPage({
   const { tokens } = useTokens(campaignId, selectedMapLevelId ?? "");
   const { fogZones } = useFogState(
     campaignId,
-    "__all__",
+    playerId,
     selectedMapLevelId ?? ""
   );
 
@@ -155,6 +162,7 @@ export default function PlayerSessionPage({
               tokens={tokens}
               interactive={false}
               viewMode="player"
+              playerId={playerId ?? undefined}
               fogZones={fogZones}
               mapLevels={mapLevels}
             />

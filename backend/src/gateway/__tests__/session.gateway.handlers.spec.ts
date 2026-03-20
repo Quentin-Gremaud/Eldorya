@@ -33,6 +33,7 @@ describe('SessionGateway WS handlers', () => {
     gateway = new SessionGateway(
       {} as any,
       {} as any,
+      { recordActivity: jest.fn(), playerConnected: jest.fn(), playerDisconnected: jest.fn() } as any,
       mockSessionFinder as any,
       mockCommandBus as any,
       mockPrisma as any,

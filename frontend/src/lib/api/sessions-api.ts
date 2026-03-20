@@ -6,6 +6,7 @@ import type {
   ChangeSessionModePayload,
   PipelineModeResponse,
   TogglePipelineModePayload,
+  CockpitState,
 } from "@/types/api";
 
 type ApiFetch = <T>(path: string, options?: RequestInit) => Promise<T>;
@@ -55,6 +56,11 @@ export function createSessionsApi(apiFetch: ApiFetch) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         }
+      ),
+
+    getCockpitState: (campaignId: string, sessionId: string) =>
+      apiFetch<{ data: CockpitState }>(
+        `/api/campaigns/${campaignId}/sessions/${sessionId}/cockpit`
       ),
   };
 }

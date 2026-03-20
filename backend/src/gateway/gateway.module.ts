@@ -7,18 +7,22 @@ import { FogEventSubscriber } from './fog-event.subscriber.js';
 import { SessionEventSubscriber } from './session-event.subscriber.js';
 import { ActionEventSubscriber } from './action-event.subscriber.js';
 import { RoomManagerService } from './services/room-manager.service.js';
+import { PresenceService } from './services/presence.service.js';
 import { SessionPresentationModule } from '../presentation/session/session-presentation.module.js';
+import { CLOCK, SystemClock } from '../shared/clock.js';
 
 @Module({
   imports: [AuthModule, SessionPresentationModule, CqrsModule],
   providers: [
     SessionGateway,
     RoomManagerService,
+    PresenceService,
+    { provide: CLOCK, useClass: SystemClock },
     InventoryNotificationSubscriber,
     FogEventSubscriber,
     SessionEventSubscriber,
     ActionEventSubscriber,
   ],
-  exports: [SessionGateway, RoomManagerService],
+  exports: [SessionGateway, RoomManagerService, PresenceService],
 })
 export class GatewayModule {}

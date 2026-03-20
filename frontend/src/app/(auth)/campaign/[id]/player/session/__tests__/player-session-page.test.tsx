@@ -60,6 +60,18 @@ jest.mock("@/hooks/use-fog-state", () => ({
   }),
 }));
 
+jest.mock("@clerk/nextjs", () => ({
+  useUser: () => ({ user: { id: "user-123" } }),
+}));
+
+jest.mock("@/hooks/use-campaign-players", () => ({
+  useCampaignPlayers: () => ({
+    players: [{ userId: "user-123", name: "Player 1" }],
+    isLoading: false,
+    isError: false,
+  }),
+}));
+
 jest.mock("@/hooks/use-campaign", () => ({
   useCampaign: () => ({
     campaign: { name: "Test Campaign" },

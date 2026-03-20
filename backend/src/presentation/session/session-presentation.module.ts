@@ -5,7 +5,9 @@ import { ChangeASessionModeController } from './controllers/change-a-session-mod
 import { GetActiveSessionController } from './controllers/get-active-session.controller.js';
 import { TogglePipelineModeController } from './controllers/toggle-pipeline-mode.controller.js';
 import { GetPipelineModeController } from './controllers/get-pipeline-mode.controller.js';
+import { GetCockpitStateController } from './controllers/get-cockpit-state.controller.js';
 import { SessionFinder } from './finders/session.finder.js';
+import { CockpitStateFinder } from './finders/cockpit-state.finder.js';
 import { SessionProjection } from './projections/session.projection.js';
 import { CampaignPresentationModule } from '../campaign/campaign-presentation.module.js';
 
@@ -17,9 +19,11 @@ import { CampaignPresentationModule } from '../campaign/campaign-presentation.mo
     ChangeASessionModeController,     // PUT /campaigns/:campaignId/sessions/:sessionId/mode
     TogglePipelineModeController,     // PUT /campaigns/:campaignId/sessions/:sessionId/pipeline-mode
     GetPipelineModeController,        // GET /campaigns/:campaignId/sessions/:sessionId/pipeline-mode
+    GetCockpitStateController,        // GET /campaigns/:campaignId/sessions/:sessionId/cockpit
   ],
   providers: [
     SessionFinder,
+    CockpitStateFinder,
     SessionProjection,
   ],
   exports: [SessionFinder],

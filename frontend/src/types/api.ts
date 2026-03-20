@@ -426,3 +426,33 @@ export interface NotificationsResponse {
   notifications: NotificationItem[];
   unreadCount: number;
 }
+
+// Presence types
+
+export type PresenceStatus = "online" | "idle" | "disconnected" | "action-pending";
+
+export interface PlayerPresence {
+  userId: string;
+  sessionId: string;
+  status: PresenceStatus;
+}
+
+// Cockpit types
+
+export interface CockpitPlayer {
+  userId: string;
+  role: string;
+  characterId: string | null;
+  characterName: string | null;
+  characterStatus: string | null;
+}
+
+export interface CockpitState {
+  sessionId: string;
+  campaignId: string;
+  gmUserId: string;
+  mode: string;
+  pipelineMode: string;
+  pendingActionsCount: number;
+  players: CockpitPlayer[];
+}

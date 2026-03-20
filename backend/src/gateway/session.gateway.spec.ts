@@ -32,7 +32,21 @@ describe('SessionGateway', () => {
     tokenVerifier = new ClerkTokenVerifierService();
     tokenVerifier.onModuleInit();
 
-    gateway = new SessionGateway(tokenVerifier);
+    gateway = new SessionGateway(
+      tokenVerifier,
+      {} as any,
+      {
+        onPresenceChange: jest.fn(),
+        start: jest.fn(),
+        recordActivity: jest.fn(),
+        playerConnected: jest.fn(),
+        playerDisconnected: jest.fn(),
+        getPresences: jest.fn().mockReturnValue([]),
+      } as any,
+      {} as any,
+      { execute: jest.fn() } as any,
+      {} as any,
+    );
     jest.clearAllMocks();
 
     const mockServer = {

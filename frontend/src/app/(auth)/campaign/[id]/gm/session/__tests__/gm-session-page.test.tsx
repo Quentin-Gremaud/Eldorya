@@ -193,13 +193,13 @@ describe("GmSessionCockpitPage", () => {
     });
   });
 
-  it("renders Session Cockpit heading with Preparation badge when session in prep mode", () => {
+  it("renders Session Live heading with Preparation badge when session in prep mode", () => {
     render(
       <GmSessionCockpitPage params={Promise.resolve({ id: "campaign-123" })} />,
       { wrapper: createWrapper() }
     );
 
-    expect(screen.getByRole("heading", { name: "Session Cockpit" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Session Live" })).toBeInTheDocument();
     expect(screen.getByText("Preparation")).toBeInTheDocument();
   });
 
@@ -330,14 +330,13 @@ describe("GmSessionCockpitPage", () => {
     });
   });
 
-  it("renders back button linking to /campaign/{id}/gm/prep", () => {
+  it("no longer renders back button (sidebar handles navigation)", () => {
     render(
       <GmSessionCockpitPage params={Promise.resolve({ id: "campaign-123" })} />,
       { wrapper: createWrapper() }
     );
 
-    const backButton = screen.getByLabelText("Back to campaign");
-    expect(backButton).toHaveAttribute("href", "/campaign/campaign-123/gm/prep");
+    expect(screen.queryByLabelText("Back to campaign")).not.toBeInTheDocument();
   });
 
   it("shows PipelineModeToggle when session is in live mode", () => {
@@ -370,18 +369,12 @@ describe("GmSessionCockpitPage", () => {
     expect(screen.queryByLabelText("Toggle mandatory pipeline mode")).not.toBeInTheDocument();
   });
 
-  it("renders breadcrumb with Dashboard, campaign name, and Session", () => {
+  it("no longer renders breadcrumb (sidebar handles navigation)", () => {
     render(
       <GmSessionCockpitPage params={Promise.resolve({ id: "campaign-123" })} />,
       { wrapper: createWrapper() }
     );
 
-    expect(screen.getByLabelText("breadcrumb")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Dashboard" })).toHaveAttribute("href", "/dashboard");
-    expect(screen.getByRole("link", { name: "Test Campaign" })).toHaveAttribute(
-      "href",
-      "/campaign/campaign-123/gm/prep"
-    );
-    expect(screen.getByText("Session")).toBeInTheDocument();
+    expect(screen.queryByLabelText("breadcrumb")).not.toBeInTheDocument();
   });
 });

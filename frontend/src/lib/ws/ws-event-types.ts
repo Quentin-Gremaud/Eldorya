@@ -28,4 +28,6 @@ export const WS_EVENTS = {
   ActionCancelled: 'ActionCancelled',
   ActionCancelledConfirmation: 'ActionCancelledConfirmation',
   PipelineModeChanged: 'PipelineModeChanged',
+  PresenceChanged: 'PresenceChanged',
+  PresenceSnapshot: 'PresenceSnapshot',
 } as const;

@@ -32,6 +32,7 @@ describe('SessionGateway - join-session', () => {
     gateway = new SessionGateway(
       {} as any,
       roomManager,
+      { recordActivity: jest.fn(), playerConnected: jest.fn(), playerDisconnected: jest.fn(), getPresences: jest.fn().mockReturnValue([]) } as any,
       mockSessionFinder as unknown as SessionFinder,
       { execute: jest.fn() } as any,
       mockPrisma as any,
@@ -42,6 +43,7 @@ describe('SessionGateway - join-session', () => {
       userId: playerId,
       join: jest.fn().mockResolvedValue(undefined),
       leave: jest.fn().mockResolvedValue(undefined),
+      emit: jest.fn(),
     } as unknown as AuthenticatedSocket;
   });
 

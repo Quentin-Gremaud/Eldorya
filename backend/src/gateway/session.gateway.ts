@@ -8,11 +8,12 @@ import {
 } from '@nestjs/websockets';
 import { Logger } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
-import { Server } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import { ClerkTokenVerifierService } from '../infrastructure/auth/clerk-token-verifier.service.js';
 import { PrismaService } from '../infrastructure/database/prisma.service.js';
-import { AuthenticatedSocket } from './types/authenticated-socket.js';
+import type { AuthenticatedSocket } from './types/authenticated-socket.js';
 import { RoomManagerService } from './services/room-manager.service.js';
+import { PresenceService } from './services/presence.service.js';
 import { SessionFinder } from '../presentation/session/finders/session.finder.js';
 import { PingPlayerCommand } from '../session/action-pipeline/commands/ping-player.command.js';
 import { ProposeActionCommand } from '../session/action-pipeline/commands/propose-action.command.js';
@@ -46,6 +47,7 @@ export class SessionGateway
   constructor(
     private readonly tokenVerifier: ClerkTokenVerifierService,
     private readonly roomManager: RoomManagerService,
+    private readonly presenceService: PresenceService,
     private readonly sessionFinder: SessionFinder,
     private readonly commandBus: CommandBus,
     private readonly prisma: PrismaService,
@@ -79,6 +81,22 @@ export class SessionGateway
       }
     });
 
+    // Set up presence change listener to emit PresenceChanged events
+    this.presenceService.onPresenceChange((change) => {
+      const roomName = this.roomManager.getRoomName(change.sessionId);
+      this.server?.to(roomName).emit('PresenceChanged', {
+        type: 'PresenceChanged',
+        data: {
+          sessionId: change.sessionId,
+          userId: change.userId,
+          status: change.status,
+        },
+      });
+    });
+
+    // Start idle detection timer
+    this.presenceService.start();
+
     this.logger.log('WebSocket Gateway initialized with JWT authentication');
   }
 
@@ -89,6 +107,7 @@ export class SessionGateway
   }
 
   handleDisconnect(client: AuthenticatedSocket) {
+    this.presenceService.playerDisconnected(client.id);
     this.logger.log(
       `Client disconnected: ${client.id} (userId: ${client.userId})`,
     );
@@ -96,9 +115,10 @@ export class SessionGateway
 
   @SubscribeMessage('join-session')
   async handleJoinSession(
-    client: AuthenticatedSocket,
+    client: Socket,
     payload: { sessionId: string; campaignId: string },
   ): Promise<{ success: boolean; error?: string }> {
+    const authClient = client as AuthenticatedSocket;
     const { sessionId, campaignId } = payload;
 
     if (!sessionId || typeof sessionId !== 'string') {
@@ -114,13 +134,20 @@ export class SessionGateway
     }
 
     // GM can always join
-    if (session.gmUserId === client.userId) {
-      await this.roomManager.joinRoom(client, sessionId);
+    if (session.gmUserId === authClient.userId) {
+      await this.roomManager.joinRoom(authClient, sessionId);
+      this.presenceService.playerConnected(sessionId, authClient.userId, client.id);
+      // Send presence snapshot to GM on join/reconnect
+      const presences = this.presenceService.getPresences(sessionId);
+      client.emit('PresenceSnapshot', {
+        type: 'PresenceSnapshot',
+        data: { sessionId, presences },
+      });
       return { success: true };
     }
 
     // C-4: Verify caller is a campaign member
-    const isMember = await this.isCampaignMember(campaignId, client.userId);
+    const isMember = await this.isCampaignMember(campaignId, authClient.userId);
     if (!isMember) {
       return { success: false, error: 'Not a campaign member' };
     }
@@ -130,15 +157,18 @@ export class SessionGateway
       return { success: false, error: 'Session is not in live mode' };
     }
 
-    await this.roomManager.joinRoom(client, sessionId);
+    await this.roomManager.joinRoom(authClient, sessionId);
+    this.presenceService.playerConnected(sessionId, authClient.userId, client.id);
     return { success: true };
   }
 
   @SubscribeMessage('ping-player')
   async handlePingPlayer(
-    client: AuthenticatedSocket,
+    client: Socket,
     payload: { sessionId: string; campaignId: string; playerId: string },
   ): Promise<{ success: boolean; error?: string }> {
+    const authClient = client as AuthenticatedSocket;
+    this.presenceService.recordActivity(client.id);
     const { sessionId, campaignId, playerId } = payload;
 
     if (!sessionId || typeof sessionId !== 'string') {
@@ -155,7 +185,7 @@ export class SessionGateway
     if (!session || session.campaignId !== campaignId) {
       return { success: false, error: 'Session not found' };
     }
-    if (session.gmUserId !== client.userId) {
+    if (session.gmUserId !== authClient.userId) {
       return { success: false, error: 'Only the GM can ping players' };
     }
     if (session.mode !== 'live') {
@@ -164,7 +194,7 @@ export class SessionGateway
 
     try {
       await this.commandBus.execute(
-        new PingPlayerCommand(sessionId, campaignId, client.userId, playerId),
+        new PingPlayerCommand(sessionId, campaignId, authClient.userId, playerId),
       );
       return { success: true };
     } catch (err) {
@@ -175,7 +205,7 @@ export class SessionGateway
 
   @SubscribeMessage('propose-action')
   async handleProposeAction(
-    client: AuthenticatedSocket,
+    client: Socket,
     payload: {
       sessionId: string;
       campaignId: string;
@@ -185,6 +215,8 @@ export class SessionGateway
       target?: string;
     },
   ): Promise<{ success: boolean; error?: string }> {
+    const authClient = client as AuthenticatedSocket;
+    this.presenceService.recordActivity(client.id);
     const { sessionId, campaignId, actionId, actionType, description, target } = payload;
 
     if (!sessionId || typeof sessionId !== 'string') {
@@ -212,7 +244,7 @@ export class SessionGateway
     }
 
     // C-3: Verify caller is a campaign member
-    const isMember = await this.isCampaignMember(campaignId, client.userId);
+    const isMember = await this.isCampaignMember(campaignId, authClient.userId);
     if (!isMember) {
       return { success: false, error: 'Not a campaign member' };
     }
@@ -223,7 +255,7 @@ export class SessionGateway
           actionId,
           sessionId,
           campaignId,
-          client.userId,
+          authClient.userId,
           actionType,
           description,
           target ?? null,
@@ -238,7 +270,7 @@ export class SessionGateway
 
   @SubscribeMessage('validate-action')
   async handleValidateAction(
-    client: AuthenticatedSocket,
+    client: Socket,
     payload: {
       sessionId: string;
       campaignId: string;
@@ -246,6 +278,8 @@ export class SessionGateway
       narrativeNote?: string;
     },
   ): Promise<{ success: boolean; error?: string }> {
+    const authClient = client as AuthenticatedSocket;
+    this.presenceService.recordActivity(client.id);
     const { sessionId, campaignId, actionId, narrativeNote } = payload;
 
     if (!sessionId || typeof sessionId !== 'string') {
@@ -267,7 +301,7 @@ export class SessionGateway
     if (!session || session.campaignId !== campaignId) {
       return { success: false, error: 'Session not found' };
     }
-    if (session.gmUserId !== client.userId) {
+    if (session.gmUserId !== authClient.userId) {
       return { success: false, error: 'Only the GM can validate actions' };
     }
     if (session.mode !== 'live') {
@@ -280,7 +314,7 @@ export class SessionGateway
           actionId,
           sessionId,
           campaignId,
-          client.userId,
+          authClient.userId,
           narrativeNote ?? null,
         ),
       );
@@ -293,7 +327,7 @@ export class SessionGateway
 
   @SubscribeMessage('reject-action')
   async handleRejectAction(
-    client: AuthenticatedSocket,
+    client: Socket,
     payload: {
       sessionId: string;
       campaignId: string;
@@ -301,6 +335,8 @@ export class SessionGateway
       feedback: string;
     },
   ): Promise<{ success: boolean; error?: string }> {
+    const authClient = client as AuthenticatedSocket;
+    this.presenceService.recordActivity(client.id);
     const { sessionId, campaignId, actionId, feedback } = payload;
 
     if (!sessionId || typeof sessionId !== 'string') {
@@ -323,7 +359,7 @@ export class SessionGateway
     if (!session || session.campaignId !== campaignId) {
       return { success: false, error: 'Session not found' };
     }
-    if (session.gmUserId !== client.userId) {
+    if (session.gmUserId !== authClient.userId) {
       return { success: false, error: 'Only the GM can reject actions' };
     }
     if (session.mode !== 'live') {
@@ -336,7 +372,7 @@ export class SessionGateway
           actionId,
           sessionId,
           campaignId,
-          client.userId,
+          authClient.userId,
           feedback.trim(),
         ),
       );
@@ -349,13 +385,15 @@ export class SessionGateway
 
   @SubscribeMessage('reorder-action-queue')
   async handleReorderActionQueue(
-    client: AuthenticatedSocket,
+    client: Socket,
     payload: {
       sessionId: string;
       campaignId: string;
       orderedActionIds: string[];
     },
   ): Promise<{ success: boolean; error?: string }> {
+    const authClient = client as AuthenticatedSocket;
+    this.presenceService.recordActivity(client.id);
     const { sessionId, campaignId, orderedActionIds } = payload;
 
     if (!sessionId || typeof sessionId !== 'string') {
@@ -378,7 +416,7 @@ export class SessionGateway
     if (!session || session.campaignId !== campaignId) {
       return { success: false, error: 'Session not found' };
     }
-    if (session.gmUserId !== client.userId) {
+    if (session.gmUserId !== authClient.userId) {
       return { success: false, error: 'Only the GM can reorder the action queue' };
     }
     if (session.mode !== 'live') {
@@ -391,7 +429,7 @@ export class SessionGateway
           sessionId,
           campaignId,
           orderedActionIds,
-          client.userId,
+          authClient.userId,
         ),
       );
       return { success: true };
@@ -403,13 +441,15 @@ export class SessionGateway
 
   @SubscribeMessage('cancel-action')
   async handleCancelAction(
-    client: AuthenticatedSocket,
+    client: Socket,
     payload: {
       sessionId: string;
       campaignId: string;
       actionId: string;
     },
   ): Promise<{ success: boolean; error?: string }> {
+    const authClient = client as AuthenticatedSocket;
+    this.presenceService.recordActivity(client.id);
     const { sessionId, campaignId, actionId } = payload;
 
     if (!sessionId || typeof sessionId !== 'string' || !UUID_REGEX.test(sessionId)) {
@@ -431,7 +471,7 @@ export class SessionGateway
     }
 
     // Verify caller is a campaign member
-    const isMember = await this.isCampaignMember(campaignId, client.userId);
+    const isMember = await this.isCampaignMember(campaignId, authClient.userId);
     if (!isMember) {
       return { success: false, error: 'Not a campaign member' };
     }
@@ -442,7 +482,7 @@ export class SessionGateway
           actionId,
           sessionId,
           campaignId,
-          client.userId,
+          authClient.userId,
         ),
       );
       return { success: true };
@@ -454,13 +494,15 @@ export class SessionGateway
 
   @SubscribeMessage('toggle-pipeline-mode')
   async handleTogglePipelineMode(
-    client: AuthenticatedSocket,
+    client: Socket,
     payload: {
       sessionId: string;
       campaignId: string;
       pipelineMode: string;
     },
   ): Promise<{ success: boolean; error?: string }> {
+    const authClient = client as AuthenticatedSocket;
+    this.presenceService.recordActivity(client.id);
     const { sessionId, campaignId, pipelineMode } = payload;
 
     if (!sessionId || typeof sessionId !== 'string') {
@@ -477,7 +519,7 @@ export class SessionGateway
     if (!session || session.campaignId !== campaignId) {
       return { success: false, error: 'Session not found' };
     }
-    if (session.gmUserId !== client.userId) {
+    if (session.gmUserId !== authClient.userId) {
       return { success: false, error: 'Only the GM can toggle pipeline mode' };
     }
     if (session.mode !== 'live') {
@@ -489,7 +531,7 @@ export class SessionGateway
         new TogglePipelineModeCommand(
           sessionId,
           campaignId,
-          client.userId,
+          authClient.userId,
           pipelineMode,
         ),
       );
